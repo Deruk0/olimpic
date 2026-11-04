@@ -1,0 +1,13 @@
+import type { Lesson, Task, WorkKind, WorkSettings } from "./model";
+export type LibraryKind = "theory" | "task" | "work";
+export type LibraryWorkKind = Exclude<WorkKind, "diagnostic">;
+export const libraryKinds = ["theory", "task", "work"] as const;
+export const libraryLabels = { theory: "Теория", task: "Банк задач", work: "Работы" };
+export const libraryWorkKinds = ["practice", "homework", "assessment"] as const;
+export type TheoryTemplate = Pick<Lesson, "title" | "topic" | "theory" | "materials">;
+export type WorkTemplate = { title: string; kind: LibraryWorkKind; settings: WorkSettings; tasks: { id: string; task: Task }[] };
+export type Entry<K extends LibraryKind, Data> = { id: string; kind: K; title: string; ready: boolean; data: Data };
+export type LibraryEntry = Entry<"theory", TheoryTemplate> | Entry<"task", Task> | Entry<"work", WorkTemplate>;
+export type AssignmentSources = { theory: string; theoryIds?: string[]; works: Partial<Record<LibraryWorkKind, string>> };
+export const libraryPath = (kind: LibraryKind, id?: string) => "/cabinet/library?kind=" + kind + (id ? "&id=" + encodeURIComponent(id) : "");
+export const planningPath = (id?: string) => "/cabinet/planning" + (id ? "?id=" + encodeURIComponent(id) : "");
