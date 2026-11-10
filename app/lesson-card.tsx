@@ -1,46 +1,12 @@
 import Link from "next/link";
 import { FormattedText } from "./formatted-text";
-import { formats, levels, type Assignment, type Material, type Phase, type Submission } from "../lib/model";
-import { lessonPath, workPath } from "../lib/paths";
-import { workKinds, workLabels, workState, workStates, workTasks } from "../lib/work";
+import { formats, type Assignment, type Material, type Phase, type Submission } from "../lib/model";
+import { workPath } from "../lib/paths";
+import { workKinds, workLabels, workTasks } from "../lib/work";
 
 const zone = "Europe/Moscow";
 const day = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", timeZone: zone });
 const clock = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: zone });
-
-export function StudentLesson({ assignment, submission, attended, expanded, index }: {
-  assignment: Assignment; submission?: Submission; attended: boolean; expanded: boolean; index: number;
-}) {
-  const { content, settings } = assignment;
-  const start = new Date(assignment.starts);
-  const end = new Date(start.getTime() + (settings.duration ?? 90) * 60_000);
-  const homework = workTasks(assignment, "homework");
-  const percent = workState(homework, submission) === "reviewed" ? 100 : 0;
-  const topics = [...new Set([content.topic, ...content.tasks.map(task => task.topic)])];
-  return <article className="lesson-card" id={"work-" + assignment.id}>
-    <details className="lesson-fold" open={expanded}>
-      <summary className="lesson-summary">
-        <div className="lesson-main">
-          <div className="lesson-date">▦ {day.format(start)} <span>· {assignment.kind === "diagnostic" ? "Диагностика" : "Занятие " + index + " · " + levels[assignment.level]}</span></div>
-          <div className="lesson-title"><h2>{content.title}</h2>{attended && <span className="lesson-done">✓ Посещено</span>}</div>
-          <div className="lesson-meta"><span>{formats[settings.format ?? "online"]}</span><span>{clock.format(start)}–{clock.format(end)} МСК</span></div>
-          {homework.length > 0 && <div className="lesson-progress"><div><span>Прогресс по ДЗ</span><b>{percent}%</b></div><progress max={100} value={percent} aria-label="Прогресс по домашним заданиям" /></div>}
-          <p className="lesson-topics"><b>Темы занятия</b> {topics.join(" · ")}</p>
-        </div>
-        <span className="lesson-chevron" aria-hidden="true">⌄</span>
-      </summary>
-      <div className="lesson-body">
-        <div className="controls lesson-links">
-          <Link className="button" href={lessonPath(assignment.id)}>Открыть занятие</Link>
-          {workKinds.map(kind => {
-            const tasks = workTasks(assignment, kind);
-            return tasks.length > 0 && <Link key={kind} className="button secondary" href={workPath(assignment.id, kind)}>{workLabels[kind]} · {workStates[workState(tasks, submission)]}</Link>;
-          })}
-        </div>
-      </div>
-    </details>
-  </article>;
-}
 
 export function LessonMaterials({ assignment, showWorks = true }: { assignment: Assignment; showWorks?: boolean }) {
   const { content, settings } = assignment;
@@ -49,8 +15,8 @@ export function LessonMaterials({ assignment, showWorks = true }: { assignment: 
   return <>
     <section className="panel lesson-section">
       <div className="controls">
-        <span className="badge">{formats[settings.format ?? "online"]}</span>
-        <span>{day.format(new Date(assignment.starts))} · {clock.format(new Date(assignment.starts))} МСК · {settings.duration ?? 90} мин</span>
+        <span className="badge">{assignment.starts ? formats[settings.format ?? "online"] : "Без даты"}</span>
+        {assignment.starts && <span>{day.format(new Date(assignment.starts))} · {clock.format(new Date(assignment.starts))} МСК · {settings.duration ?? 90} мин</span>}
         {settings.location && <span>Место проведения · {settings.location}</span>}
       </div>
       <div className="controls">
@@ -65,8 +31,9 @@ export function LessonMaterials({ assignment, showWorks = true }: { assignment: 
     </section>
     {showWorks && <section className="panel lesson-section">
       <h2>Работы занятия</h2>
-      <div className="controls">{workKinds.filter(kind => workTasks(assignment, kind).length).map(kind =>
-        <Link key={kind} className="button" href={workPath(assignment.id, kind)}>{workLabels[kind]} →</Link>)}</div>
+      {content.tasks.length ? <div className="controls">{workKinds.filter(kind => workTasks(assignment, kind).length).map(kind =>
+        <Link key={kind} className="button" href={workPath(assignment.id, kind)}>{workLabels[kind]} →</Link>)}</div> :
+        <p className="muted">К занятию пока нет учебных работ.</p>}
     </section>}
   </>;
 }

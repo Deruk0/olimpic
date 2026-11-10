@@ -5,8 +5,8 @@ import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { account } from "../lib/auth";
 import { first, rows, transaction } from "../lib/db";
-import { libraryKinds, libraryPath, libraryWorkKinds, planningPath, type AssignmentSources, type LibraryEntry, type LibraryKind, type LibraryWorkKind, type TheoryTemplate, type WorkTemplate } from "../lib/library";
-import { emptyProgram, type Assignment, type Lesson, type LessonSettings, type Task, type WorkSettings } from "../lib/model";
+import { libraryKinds, libraryPath, libraryWorkKinds, optionalTaskSections, planningPath, type AssignmentSources, type LibraryEntry, type LibraryKind, type LibraryTask, type LibraryWorkKind, type TheoryTemplate, type WorkTemplate } from "../lib/library";
+import { emptyProgram, type Assignment, type Lesson, type Task, type WorkSettings } from "../lib/model";
 import { parseProgram } from "../lib/program-editor";
 import { workKind } from "../lib/work";
 
@@ -60,6 +60,8 @@ export async function saveLibrary(_previous: Result, form: FormData): Promise<Re
         throw new FormError(error instanceof Error ? error.message : "Проверьте теорию.");
       }
     } else if (kind === "task") {
+      const theoryId = field(form, "theoryId");
+      if (theoryId && !await first("SELECT id FROM library_items WHERE id=$1 AND kind='theory'", [theoryId])) throw new FormError("Связанная теория недоступна. Выберите другую или оставьте поле пустым.");
       const response = field(form, "response") as Task["response"];
       if (!response || !["file", "text", "single", "multiple"].includes(response)) throw new FormError("Выберите формат ответа.");
       const options = response === "single" || response === "multiple" ? form.getAll("option").map(value => limited(String(value).trim(), 500, "Вариант ответа", ready)) : [];
@@ -74,7 +76,9 @@ export async function saveLibrary(_previous: Result, form: FormData): Promise<Re
         solution: limited(rich(form, "solution"), 6000, "Разбор"),
         rubric: limited(rich(form, "rubric"), 5000, "Критерии проверки"),
         response, options, correct,
-        modelAnswer: response === "text" ? limited(rich(form, "modelAnswer"), 8000, "Образец ответа", ready) : ""
+        modelAnswer: limited(rich(form, "modelAnswer"), 8000, "Образец ответа"),
+        hiddenSections: optionalTaskSections.filter(section => form.has("hide." + section)),
+        theoryId: theoryId || undefined
       };
     } else {
       const workKind = field(form, "workKind") as LibraryWorkKind;
@@ -87,7 +91,9 @@ export async function saveLibrary(_previous: Result, form: FormData): Promise<Re
         const latest = tasks.find(task => task.id === taskId);
         const snapshot = existing?.data.tasks.find(task => task.id === taskId);
         if (!latest && !snapshot) throw new FormError("Одна из выбранных задач недоступна.");
-        return { id: taskId, task: (latest?.data ?? snapshot?.task)! };
+        const { hiddenSections = [], theoryId: _theoryId, ...task } = (latest?.data ?? snapshot?.task)! as LibraryTask;
+        for (const section of hiddenSections) delete task[section];
+        return { id: taskId, task };
       });
       const settings: WorkSettings = { instructions: limited(rich(form, "instructions"), 5000, "Инструкция") };
       if (workKind === "homework") settings.dueDays = optionalCount(form, "dueDays", 1, 90, "Срок в днях");
@@ -95,7 +101,7 @@ export async function saveLibrary(_previous: Result, form: FormData): Promise<Re
         settings.minutes = optionalCount(form, "minutes", 1, 480, "Рекомендуемое время");
         settings.pass = optionalCount(form, "pass", 0, 100, "Порог");
       }
-      data = { title, kind: workKind, settings, tasks: entries };
+      data = { title, topic: limited(field(form, "topic"), 100, "Тема"), kind: workKind, settings, tasks: entries };
     }
     if (id) {
       const changed = await first("UPDATE library_items SET title=$3,ready=$4,data=$5,updated=now() WHERE id=$1 AND kind=$2 RETURNING id", [id, kind, title, ready, JSON.stringify(data)]);
@@ -107,30 +113,29 @@ export async function saveLibrary(_previous: Result, form: FormData): Promise<Re
   redirect(libraryPath(kind, key) + "&saved=1");
 }
 
+export async function deleteLibrary(_previous: Result, form: FormData): Promise<Result> {
+  if ((await account())?.role !== "methodist") return { error: "Библиотека недоступна." };
+  const kind = field(form, "kind") as LibraryKind;
+  const id = field(form, "id");
+  if (!libraryKinds.includes(kind) || !id) return { error: "Материал недоступен." };
+  try {
+    const deleted = await first("DELETE FROM library_items WHERE id=$1 AND kind=$2 RETURNING id", [id, kind]);
+    if (!deleted) throw new FormError("Материал уже удалён или недоступен.");
+  } catch (error) { return errorResult(error); }
+  redirect(libraryPath(kind) + "&deleted=1");
+}
+
 export async function savePlannedLesson(_previous: Result, form: FormData): Promise<Result> {
   if ((await account())?.role !== "methodist") return { error: "Расписание недоступно." };
   const id = field(form, "id");
   const key = id || randomUUID();
   try {
-    const start = field(form, "starts");
-    const utc = Date.parse(start + "Z");
-    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(start) || !Number.isFinite(utc) || new Date(utc).toISOString().slice(0,16) !== start) throw new FormError("Укажите дату и время занятия.");
-    const starts = new Date(start + "+03:00");
-    if (starts.getTime() <= Date.now()) throw new FormError("Назначьте занятие на будущее время.");
-    const format = field(form, "format");
-    if (format !== "online" && format !== "offline" && format !== "self") throw new FormError("Укажите формат.");
-    const settings: LessonSettings = {
-      format, duration: count(field(form, "duration"), 5, 480, "Длительность"),
-      location: format === "offline" ? limited(field(form, "location"), 300, "Место проведения", true) : "",
-      recording: format === "online" ? url(field(form, "recording")) : ""
-    };
-    const meeting = format === "online" ? url(field(form, "meeting")) : "";
     const level = field(form, "level");
     if (level !== "basic" && level !== "advanced") throw new FormError("Выберите уровень.");
     await transaction(async connection => {
-      const current = id ? await first<Assignment>("SELECT * FROM assignments WHERE id=$1 AND kind='lesson' FOR UPDATE", [id], connection) : undefined;
+      const current = id ? await first<Assignment>("SELECT * FROM assignments WHERE id=$1 AND kind='lesson' AND deleted_at IS NULL FOR UPDATE", [id], connection) : undefined;
       if (id && !current) throw new FormError("Занятие недоступно.");
-      if (current && (new Date(current.starts).getTime() <= Date.now() || await first("SELECT 1 FROM submissions WHERE assignment=$1 LIMIT 1", [id], connection))) {
+      if (current && ((current.starts && new Date(current.starts).getTime() <= Date.now()) || await first("SELECT 1 FROM submissions WHERE assignment=$1 LIMIT 1", [id], connection))) {
         throw new FormError("Материалы можно менять до начала занятия, пока по нему нет сданных работ.");
       }
       const group = current?.group_id ?? field(form, "group");
@@ -171,11 +176,11 @@ export async function savePlannedLesson(_previous: Result, form: FormData): Prom
         content.work![kind] = { ...item.data.settings, title: item.data.title };
         sources.works[kind] = workId;
       }
-      const payload = [key, group, level, JSON.stringify(content), starts.toISOString(), meeting, JSON.stringify(settings), JSON.stringify(sources)];
+      const payload = [key, group, level, JSON.stringify(content), JSON.stringify(sources)];
       if (current) {
-        await rows("UPDATE assignments SET group_id=$2,level=$3,content=$4,starts=$5,meeting=$6,settings=$7,sources=$8,revision=revision+1 WHERE id=$1", payload, connection);
+        await rows("UPDATE assignments SET group_id=$2,level=$3,content=$4,sources=$5,revision=revision+1 WHERE id=$1", payload, connection);
       } else {
-        await rows("INSERT INTO assignments(id,group_id,kind,level,content,starts,meeting,settings,sources) VALUES ($1,$2,'lesson',$3,$4,$5,$6,$7,$8)", payload, connection);
+        await rows("INSERT INTO assignments(id,group_id,kind,level,content,starts,meeting,sources) VALUES ($1,$2,'lesson',$3,$4,NULL,'',$5)", payload, connection);
       }
     });
   } catch (error) { return errorResult(error); }

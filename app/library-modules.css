@@ -1,0 +1,12 @@
+.library-editor [hidden] { display: none !important; }
+.library-module-nav { width: 100%; display: flex; flex-wrap: wrap; gap: .45rem; padding-bottom: .9rem; border-bottom: 1px solid var(--line); }
+.library-module-nav button { background: var(--soft); color: var(--ink); font-size: .85rem; padding: .5rem .7rem; }
+.library-module-nav button.is-current { background: var(--accent); color: white; }
+.library-module-info, .library-modules { width: 100%; display: grid; gap: 1rem; min-width: 0; }
+.library-module-info { max-width: 36rem; }
+.library-module-info > button { justify-self: start; }
+.library-module-info h3, .library-module-heading h3 { margin: 0; }
+.library-module-heading { padding: .4rem 0; border-bottom: 1px solid var(--line); }
+.library-module-heading small { display: block; margin-top: .3rem; overflow-wrap: anywhere; }
+.theory-block-nav { display: grid; gap: .4rem; border-top: 1px solid var(--line); padding-top: .65rem; }
+.theory-block-nav button[aria-current=step] { outline: 2px solid var(--accent); outline-offset: 1px; }

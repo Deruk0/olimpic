@@ -17,3 +17,6 @@ ALTER TABLE assignments ADD COLUMN IF NOT EXISTS sources jsonb;
 ALTER TABLE assignments ADD COLUMN IF NOT EXISTS revision integer NOT NULL DEFAULT 1;
 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS answers jsonb NOT NULL DEFAULT '{}';
 CREATE TABLE IF NOT EXISTS material_files(id text PRIMARY KEY, filename text NOT NULL, bytes bytea NOT NULL);
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS demo boolean NOT NULL DEFAULT false;
+ALTER TABLE assignments ALTER COLUMN starts DROP NOT NULL;
+ALTER TABLE assignments ADD COLUMN IF NOT EXISTS deleted_at timestamptz;

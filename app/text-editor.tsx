@@ -126,7 +126,7 @@ export function TextEditor({ label, name, value, onChange, maxLength, rows = 4 }
     <button type="button" title={title} aria-label={title} aria-pressed={pressed} disabled={disabled} onMouseDown={event => event.preventDefault()} onClick={run}><TextIcon name={icon} /></button>;
   return <div className="text-editor visual-editor">
     <label id={id} onClick={() => editor?.commands.focus()}>{label}</label>
-    <EditorContent className="visual-text" style={{ minHeight: Math.max(17, rows * 2) + "rem" }} editor={editor} />
+    <EditorContent className="visual-text" style={{ minHeight: (rows === 2 ? 7 : Math.max(17, rows * 2)) + "rem" }} editor={editor} />
     <div className="text-tools" role="group" aria-label="Форматирование текста">
       {tool("B","Жирный",() => editor?.chain().focus().toggleBold().run(),active?.bold)}
       {tool("I","Курсив",() => editor?.chain().focus().toggleItalic().run(),active?.italic)}

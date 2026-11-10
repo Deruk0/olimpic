@@ -7,10 +7,11 @@ import { CabinetFrame } from "../../frame";
 
 export default async function LessonPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireAccount("student");
-  const assignment = await studentAssignment(user.id, (await params).id);
+  const { id } = await params;
+  const assignment = await studentAssignment(user.id, id);
   if (!assignment) notFound();
-  return <CabinetFrame user={user} view="learn" title={assignment.content.title}>
-    <p><Link href="/cabinet?view=learn">← К расписанию</Link></p>
+  return <CabinetFrame user={user} view="schedule" title={assignment.content.title}>
+    <p><Link href={"/cabinet/schedule?focus=" + encodeURIComponent(id) + "#lesson-" + encodeURIComponent(id)}>← К расписанию</Link></p>
     <LessonMaterials assignment={assignment} />
   </CabinetFrame>;
 }

@@ -16,7 +16,7 @@ export function ScheduleEditor({ groups, programs, assignment }: { groups: Group
   const published = programs.filter(item => item.published);
   const [level, setLevel] = useState(published[0]?.level ?? "");
   const [format, setFormat] = useState<keyof typeof formats>(assignment?.settings.format ?? "online");
-  const starts = assignment && new Date(new Date(assignment.starts).getTime() + 3 * 3600000).toISOString().slice(0, 16);
+  const starts = assignment?.starts ? new Date(new Date(assignment.starts).getTime() + 3 * 3600000).toISOString().slice(0, 16) : undefined;
   if (!assignment && (!published.length || !groups.length)) return <p className="muted">Нужны опубликованные материалы и назначенная группа.</p>;
   return <form action={mutate} className="editor">
     <Hidden name="action" value={assignment ? "reschedule" : "schedule"} /><Hidden name="return" value="schedule" />
@@ -35,7 +35,7 @@ export function ScheduleEditor({ groups, programs, assignment }: { groups: Group
     {format === "online" && <label>Ссылка на видеовстречу<input name="meeting" type="url" defaultValue={assignment?.meeting} placeholder="https://…" required /></label>}
     {format === "offline" && <label>Место проведения<input name="location" defaultValue={assignment?.settings.location} maxLength={300} required /></label>}
     {format === "online" && <label>Ссылка на запись (необязательно)<input name="recording" type="url" defaultValue={assignment?.settings.recording} placeholder="https://…" /></label>}
-    <Submit>{assignment ? "Сохранить настройки занятия" : "Добавить в расписание"}</Submit>
+    <Submit>{assignment?.starts ? "Сохранить настройки занятия" : "Поставить в расписание"}</Submit>
   </form>;
 }
 

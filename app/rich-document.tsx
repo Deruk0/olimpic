@@ -25,6 +25,21 @@ export function exceedsTextLimit(value: string, max: number) {
 export const isMaterialPath = (href: string) => /^\/material-files\/[a-f0-9-]{36}$/.test(href);
 export const safeHref = (href: string) => isMaterialPath(href) || (/^https?:\/\//i.test(href) && URL.canParse(href));
 
+export function referencesMaterial(value: string | undefined, path: string) {
+  if (!value) return false;
+  const doc = readRich(value);
+  if (!doc) return value.includes("](" + path + ")");
+  const stack = [doc];
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node || typeof node !== "object") continue;
+    if (node.type === "image" && node.attrs?.src === path) return true;
+    if (Array.isArray(node.marks) && node.marks.some(mark => mark?.type === "link" && mark.attrs?.href === path)) return true;
+    if (Array.isArray(node.content)) stack.push(...node.content);
+  }
+  return false;
+}
+
 function render(node: RichNode, key: number, depth: number): ReactNode {
   if (!node || depth > 60) return null;
   const children = Array.isArray(node.content) ? node.content.map((child, i) => render(child, i, depth + 1)) : undefined;
@@ -69,7 +84,7 @@ function render(node: RichNode, key: number, depth: number): ReactNode {
     case "codeBlock": return <pre key={key}>{children}</pre>;
     case "image": {
       const src = node.attrs?.src;
-      return typeof src === "string" && isMaterialPath(src) ?
+      return typeof src === "string" && safeHref(src) ?
         <a key={key} className="material-photo" href={src} target="_blank" rel="noopener noreferrer"><img src={src} alt={typeof node.attrs?.alt === "string" ? node.attrs.alt : "Фото к материалу"} loading="lazy"/></a> : null;
     }
     default: return null;

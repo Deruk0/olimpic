@@ -9,7 +9,10 @@ import { first, rows, transaction } from "../lib/db";
 import { homeworkPath, managementPath, workPath } from "../lib/paths";
 import { recommendation, type Assignment, type Attachment, type Grade, type Group, type LessonSettings, type ProgramRow, type Submission, type Topic, type WorkKind } from "../lib/model";
 import { parseProgram } from "../lib/program-editor";
+import { preparationGoal } from "../lib/student";
 import { workKinds, workState, workTasks } from "../lib/work";
+import { demoAccounts, demoLoginEnabled } from "../lib/demo-access";
+import type { Role } from "../lib/model";
 
 class InputError extends Error {}
 const reject = (message: string): never => { throw new InputError(message); };
@@ -43,7 +46,7 @@ export async function signIn(form: FormData) {
   const redeemed = await transaction(async connection => {
     const row = await first<{ account: string }>("UPDATE invites SET used=now() WHERE hash=$1 AND (reusable OR used IS NULL) AND expires>now() RETURNING account", [hash(invite)], connection);
     if (!row) return false;
-    await rows("INSERT INTO sessions VALUES ($1,$2,now()+interval '14 days')", [hash(key), row.account], connection);
+    await rows("INSERT INTO sessions(hash,account,expires) VALUES ($1,$2,now()+interval '14 days')", [hash(key), row.account], connection);
     return true;
   });
   if (!redeemed) redirect("/?error=invite");
@@ -57,6 +60,26 @@ export async function signOut() {
   if (key) await rows("DELETE FROM sessions WHERE hash=$1", [hash(key)]);
   jar.delete(cookieName);
   redirect("/");
+}
+
+export async function demoSignIn(form: FormData) {
+  if (!demoLoginEnabled()) redirect("/");
+  const role = input(form, "role");
+  if (role !== "student" && role !== "curator" && role !== "methodist") redirect("/");
+  const key = token();
+  const jar = await cookies();
+  const previous = jar.get(cookieName)?.value;
+  const created = await transaction(async connection => {
+    const user = await first("SELECT id FROM accounts WHERE id=$1 AND role=$2", [demoAccounts[role as Role], role], connection);
+    if (!user) return false;
+    await rows("INSERT INTO sessions(hash,account,expires,demo) VALUES ($1,$2,now()+interval '1 day',true)", [hash(key), demoAccounts[role]], connection);
+    if (previous) await rows("DELETE FROM sessions WHERE hash=$1", [hash(previous)], connection);
+    return true;
+  });
+  if (!created) redirect("/?error=demo");
+  const secure = process.env.OLIMPIK_SECURE_COOKIES === "true" || (await headers()).get("x-forwarded-proto") === "https";
+  jar.set(cookieName, key, { httpOnly: true, sameSite: "lax", secure, path: "/", maxAge: 86400 });
+  redirect("/cabinet");
 }
 
 export async function saveProgram(_previous: { message: string; error: boolean }, form: FormData) {
@@ -90,14 +113,15 @@ export async function mutate(form: FormData) {
   const assignmentParam = input(form, "assignment");
   const workParam = input(form, "kind") as WorkKind;
   const work = workKinds.includes(workParam) ? workParam : undefined;
+  const taskParam = input(form, "task");
   const staffId = section === "students" ? input(form, "student") : section === "groups" ? input(form, "group") : assignmentParam;
   const staffDetail = input(form, "detail") === "yes" && ["schedule", "review", "students", "groups"].includes(section) && !!staffId;
   const reviewStudent = input(form, "student");
-  const back = action === "submit" && section === "homework" && assignmentParam ? (work ? workPath(assignmentParam, work) : homeworkPath(assignmentParam)) :
+  const back = action === "submit" && section === "homework" && assignmentParam ? (work ? workPath(assignmentParam, work) + (/^\d+$/.test(taskParam) ? "?task=" + taskParam : "") : homeworkPath(assignmentParam)) :
     staffDetail ? managementPath(section, staffId, section === "review" ? reviewStudent : undefined, work) :
+    section === "learn" ? "/cabinet/schedule" + (/^[\w-]{1,60}$/.test(assignmentParam) ? "#lesson-" + assignmentParam : "") :
     "/cabinet" + (/^[a-z]+$/.test(section) ? "?view=" + section : "") +
-    (section === "programs" && ["basic", "advanced", "diagnostic"].includes(levelParam) ? "&level=" + levelParam : "") +
-    (section === "learn" && /^[\w-]{1,60}$/.test(assignmentParam) ? "&work=" + assignmentParam : "");
+    (section === "programs" && ["basic", "advanced", "diagnostic"].includes(levelParam) ? "&level=" + levelParam : "");
   try {
     if (action === "guidance" && user.role === "methodist") {
       const group = await first("SELECT id FROM groups WHERE id=$1", [input(form, "group")]);
@@ -117,11 +141,12 @@ export async function mutate(form: FormData) {
       };
       const meeting = format === "online" ? https(required(form, "meeting", 2048)) : "";
       if (action === "reschedule") {
-        const updated = await first("UPDATE assignments a SET starts=$3,meeting=$4,settings=$5 FROM groups g WHERE a.group_id=g.id AND a.id=$1 AND g.curator=$2 RETURNING a.id", [assignmentParam, user.id, date + "+03:00", meeting, json(settings)]);
-        if (!updated) reject("Занятие недоступно.");
+        const updated = await first("UPDATE assignments a SET starts=$3,meeting=$4,settings=$5 FROM groups g WHERE a.group_id=g.id AND a.id=$1 AND g.curator=$2 AND a.deleted_at IS NULL AND (a.starts IS NOT NULL OR $3::timestamptz>now()) RETURNING a.id", [assignmentParam, user.id, date + "+03:00", meeting, json(settings)]);
+        if (!updated) reject("Занятие недоступно или для первого проведения указано прошедшее время.");
       } else {
         const group = await groupForCurator(input(form, "group"), user.id);
         const level = input(form, "level");
+        if (level !== "diagnostic") reject("Учебное занятие сначала назначает методист.");
         const program = await first<ProgramRow>("SELECT * FROM programs WHERE level=$1 AND published IS NOT NULL", [level]);
         const lesson = program?.published?.lessons[integer(input(form, "lesson"), 0, 29)] ?? reject("Выберите опубликованное занятие.");
         await rows("INSERT INTO assignments(id,group_id,kind,level,content,starts,meeting,settings) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)", [randomUUID(), group.id, level === "diagnostic" ? "diagnostic" : "lesson", level, json(lesson), date + "+03:00", meeting, json(settings)]);
@@ -129,7 +154,7 @@ export async function mutate(form: FormData) {
     } else if (action === "attendance" && user.role === "curator") {
       const assignment = input(form, "assignment");
       const student = input(form, "student");
-      const scope = await first("SELECT 1 FROM assignments a JOIN groups g ON g.id=a.group_id JOIN members m ON m.group_id=g.id WHERE a.id=$1 AND g.curator=$2 AND m.student=$3", [assignment, user.id, student]);
+      const scope = await first("SELECT 1 FROM assignments a JOIN groups g ON g.id=a.group_id JOIN members m ON m.group_id=g.id WHERE a.id=$1 AND g.curator=$2 AND m.student=$3 AND a.deleted_at IS NULL AND a.starts IS NOT NULL", [assignment, user.id, student]);
       if (!scope) reject("Ученик или занятие недоступны.");
       if (input(form, "attended") === "yes") {
         await rows("INSERT INTO attendance VALUES ($1,$2) ON CONFLICT DO NOTHING", [assignment, student]);
@@ -137,15 +162,15 @@ export async function mutate(form: FormData) {
         await rows("DELETE FROM attendance WHERE assignment=$1 AND student=$2", [assignment, student]);
       }
     } else if (action === "goal" && user.role === "student") {
-      const diagnostic = await first<ProgramRow>("SELECT * FROM programs WHERE level='diagnostic'");
       const goal = required(form, "goal", 120);
-      if (goal !== diagnostic?.published?.olympiad) reject("Выберите олимпиаду пилота.");
+      if (goal !== await preparationGoal()) reject("Выберите олимпиаду пилота.");
       await rows("UPDATE accounts SET goal=$1 WHERE id=$2", [goal, user.id]);
     } else if (action === "submit" && user.role === "student") {
-      const assignment = await first<Assignment>("SELECT a.* FROM assignments a JOIN members m ON m.group_id=a.group_id WHERE a.id=$1 AND m.student=$2", [input(form, "assignment"), user.id]);
+      const assignment = await first<Assignment>("SELECT a.* FROM assignments a JOIN members m ON m.group_id=a.group_id WHERE a.id=$1 AND m.student=$2 AND a.deleted_at IS NULL AND a.starts IS NOT NULL", [input(form, "assignment"), user.id]);
       if (!assignment) return reject("Работа недоступна.");
-      if (!user.goal) reject("Сначала укажите целевую олимпиаду.");
-      const tasks = work ? workTasks(assignment, work) : [];
+      if (!user.goal && await preparationGoal()) reject("Сначала укажите целевую олимпиаду.");
+      const sectionTasks = work ? workTasks(assignment, work) : [];
+      const tasks = taskParam ? sectionTasks.filter(({ index }) => String(index) === taskParam) : sectionTasks;
       if (!tasks.length) reject("Работа недоступна.");
       const documents: (Attachment & { mime: string; bytes: Buffer })[] = [];
       const answers: NonNullable<Submission["answers"]> = {};
@@ -177,20 +202,33 @@ export async function mutate(form: FormData) {
       }
       await transaction(async connection => {
         const key = [assignment.id, user.id];
-        const latest = await first<Assignment>("SELECT a.* FROM assignments a JOIN members m ON m.group_id=a.group_id WHERE a.id=$1 AND m.student=$2 FOR UPDATE OF a", key, connection);
+        const latest = await first<Assignment>("SELECT a.* FROM assignments a JOIN members m ON m.group_id=a.group_id WHERE a.id=$1 AND m.student=$2 AND a.deleted_at IS NULL AND a.starts IS NOT NULL FOR UPDATE OF a", key, connection);
         if (!latest || String(latest.revision) !== input(form, "revision")) reject("Материалы изменились. Откройте работу заново.");
         await rows("INSERT INTO submissions(assignment,student,files) VALUES ($1,$2,'[]') ON CONFLICT DO NOTHING", key, connection);
         const current = await first<Submission>("SELECT * FROM submissions WHERE assignment=$1 AND student=$2 FOR UPDATE", key, connection);
         if (workState(tasks, current) !== "pending") reject("Работа уже сдана.");
+        if (tasks.some(({ index }) => current?.grades?.[index] || current?.files.some(file => file.task === index) || Object.hasOwn(current?.answers ?? {}, index))) reject("Ответ на задание уже отправлен.");
+        const sectionIndexes = new Set(sectionTasks.map(({ index }) => index));
+        const attachmentIds = (current?.files ?? []).filter(file => sectionIndexes.has(file.task)).map(file => file.id);
+        const stored = await first<{ size: string }>("SELECT COALESCE(SUM(octet_length(bytes)),0)::text AS size FROM attachments WHERE id=ANY($1::text[])", [attachmentIds], connection);
+        if (Number(stored?.size ?? 0) + size > 24_000_000) reject("Лимит — 24 МБ на работу.");
         const files = [...(current?.files ?? []), ...documents.map(({ id, name, task }) => ({ id, name, task }))];
-        await rows("UPDATE submissions SET files=$3,answers=$4 WHERE assignment=$1 AND student=$2", [...key, json(files), json({ ...current?.answers, ...answers })], connection);
+        const grades = assignment.content.tasks.map((_, index) => current?.grades?.[index] ?? null);
+        for (const { task, index } of tasks) {
+          if ((task.response === "single" || task.response === "multiple") && task.correct?.length) {
+            const selected = answers[index] as number[];
+            const correct = selected.length === task.correct.length && selected.every(option => task.correct!.includes(option));
+            grades[index] = { score: correct ? task.max : 0, comment: correct ? "Верно." : "Неверно." };
+          }
+        }
+        await rows("UPDATE submissions SET files=$3,answers=$4,grades=$5 WHERE assignment=$1 AND student=$2", [...key, json(files), json({ ...current?.answers, ...answers }), json(grades.some(Boolean) ? grades : null)], connection);
         for (const file of documents) {
           await rows("INSERT INTO attachments VALUES ($1,$2,$3,$4,$5,$6)", [file.id, user.id, assignment.id, file.name, file.mime, file.bytes], connection);
         }
       });
     } else if (action === "grade" && user.role === "curator") {
       const student = input(form, "student");
-      const assignment = await first<Assignment>("SELECT a.* FROM assignments a JOIN groups g ON g.id=a.group_id JOIN members m ON m.group_id=g.id WHERE a.id=$1 AND g.curator=$2 AND m.student=$3", [input(form, "assignment"), user.id, student]);
+      const assignment = await first<Assignment>("SELECT a.* FROM assignments a JOIN groups g ON g.id=a.group_id JOIN members m ON m.group_id=g.id WHERE a.id=$1 AND g.curator=$2 AND m.student=$3 AND a.starts IS NOT NULL", [input(form, "assignment"), user.id, student]);
       if (!assignment) return reject("Работа недоступна.");
       const tasks = work ? workTasks(assignment, work) : [];
       if (!tasks.length) reject("Работа недоступна.");
@@ -218,7 +256,7 @@ export async function mutate(form: FormData) {
       for (const task of diagnosis!.content.tasks) available.add(task.topic);
       if (!programs.some(p => p.level === level && p.level !== "diagnostic" && p.published)) reject("Сначала опубликуйте учебную программу.");
       const topics: Topic[] = [];
-      const count = integer(input(form, "topicCount"), 1, 24);
+      const count = integer(input(form, "topicCount"), 1, available.size);
       for (let i = 0; i < count; i++) {
         const name = required(form, "topic." + i, 100);
         const due = required(form, "due." + i, 10);
@@ -235,7 +273,13 @@ export async function mutate(form: FormData) {
       console.error(error);
     }
     const message = error instanceof InputError ? error.message : "Не удалось сохранить. Повторите попытку.";
-    redirect(back + (back.includes("?") ? "&" : "?") + "error=" + encodeURIComponent(message));
+    redirect(withNotice(back, "error", message));
   }
-  redirect(back + (back.includes("?") ? "&" : "?") + "saved=1");
+  redirect(withNotice(back, "saved", "1"));
+}
+function withNotice(url: string, key: string, value: string) {
+  const cut = url.indexOf("#");
+  const hash = cut === -1 ? "" : url.slice(cut);
+  const path = cut === -1 ? url : url.slice(0, cut);
+  return path + (path.includes("?") ? "&" : "?") + key + "=" + encodeURIComponent(value) + hash;
 }

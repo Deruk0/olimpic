@@ -1,0 +1,13 @@
+.task-number-nav { display: flex; flex-wrap: wrap; gap: .45rem; margin: 1.2rem 0 .65rem; }
+.task-number-nav .task-number {
+  display: grid; place-items: center; width: 36px; height: 36px; padding: 0;
+  border: 2px solid transparent; border-radius: 9px; background: #e8e6ed; color: #555061;
+  font-weight: 750; font-variant-numeric: tabular-nums;
+}
+.task-number-nav .is-correct { background: #a6d875; color: #234613; }
+.task-number-nav .is-incorrect { background: #f87982; color: #62151e; }
+.task-number-nav .is-awaiting { background: #ffe4a3; color: #694600; }
+.task-number-nav .task-number[aria-current=step] { border-color: var(--ink); box-shadow: 0 0 0 2px white; }
+.task-number-nav .task-number:hover { text-decoration: none; filter: brightness(.95); }
+.task-page-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .7rem; margin-top: 1rem; }
+.task-page-controls > span { font-size: .85rem; color: var(--sub); }

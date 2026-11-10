@@ -87,20 +87,30 @@ export function ProgramEditor({ level, initial }: { level: ProgramKey; initial: 
   </form>;
 }
 
-export function Theory({ lesson, update }: { lesson: Lesson; update: (patch: Partial<Lesson>) => void }) {
+export function Theory({ lesson, update, modular = false }: { lesson: Lesson; update: (patch: Partial<Lesson>) => void; modular?: boolean }) {
   const materials = lesson.materials ?? [];
+  const [selectedBlock, setSelectedBlock] = useState(0);
+  const activeBlock = Math.min(selectedBlock, Math.max(0, materials.length - 1));
   return <div className="theory-workspace">
     <aside className="theory-insert" aria-label="Добавить блок">
-      <b>Блоки</b>
-      {Object.entries(blocks).map(([kind, label]) => <button key={kind} className="secondary" type="button" disabled={materials.length >= 32} onClick={() => update({ materials: [...materials, { title: "", value: "", kind: kind as Material["kind"], phase: "before" }] })}>+ {label}</button>)}
+      <b>Добавить блок</b>
+      {Object.entries(blocks).map(([kind, label]) => <button key={kind} className="secondary" type="button" disabled={materials.length >= 32} onClick={() => {
+        setSelectedBlock(materials.length);
+        update({ materials: [...materials, { title: "", value: "", kind: kind as Material["kind"], phase: "before" }] });
+      }}>+ {label}</button>)}
+      {modular && materials.length > 0 && <nav className="theory-block-nav" aria-label="Блоки теории">{materials.map((item, index) =>
+        <button key={index} type="button" className="secondary" aria-current={activeBlock === index ? "step" : undefined} onClick={() => setSelectedBlock(index)}>{index + 1}. {item.title || blocks[item.kind]}</button>
+      )}</nav>}
     </aside>
     <div className="theory-content">
-    <Text label="Введение или конспект" value={lesson.theory} onChange={theory => update({ theory })} max={15000} multiline />
+    {!modular && <Text label="Введение или конспект" value={lesson.theory} onChange={theory => update({ theory })} max={15000} multiline />}
+    {modular && !materials.length && <p className="muted">Выберите тип блока, чтобы добавить материал.</p>}
     {materials.map((item, i) => {
+      if (modular && i !== activeBlock) return null;
       const patch = (values: Partial<Material>) => update({ materials: materials.map((block, index) => index === i ? { ...block, ...values } : block) });
       return <section className="task-edit" key={i}>
         <div className="split"><b>{i + 1}. {blocks[item.kind]}</b><Order label="блок" index={i} count={materials.length}
-          onMove={direction => update({ materials: move(materials, i, i + direction) })}
+          onMove={direction => { setSelectedBlock(i + direction); update({ materials: move(materials, i, i + direction) }); }}
           onRemove={() => update({ materials: materials.filter((_, index) => index !== i) })} /></div>
         <Text label="Заголовок блока" value={item.title} onChange={title => patch({ title })} max={120} />
         <label>Когда изучать<select value={item.phase} onChange={e => patch({ phase: e.target.value === "after" ? "after" : "before" })}><option value="before">До занятия</option><option value="after">После занятия</option></select></label>
@@ -162,8 +172,8 @@ function Preview({ lesson, tab }: { lesson: Lesson; tab: Exclude<Tab, "info"> })
 }
 function Order({ label, index, count, onMove, onRemove }: { label: string; index: number; count: number; onMove: (direction: number) => void; onRemove: () => void }) {
   return <div className="controls">
-    <button type="button" className="secondary" disabled={index === 0} aria-label={"Поднять " + label} onClick={() => onMove(-1)}>↑</button>
-    <button type="button" className="secondary" disabled={index + 1 === count} aria-label={"Опустить " + label} onClick={() => onMove(1)}>↓</button>
+    <button type="button" className="secondary" disabled={index === 0} aria-label={"Поднять " + label} title="Переместить выше" onClick={() => onMove(-1)}>↑ Выше</button>
+    <button type="button" className="secondary" disabled={index + 1 === count} aria-label={"Опустить " + label} title="Переместить ниже" onClick={() => onMove(1)}>↓ Ниже</button>
     <button type="button" className="plain" onClick={onRemove}>Удалить {label}</button>
   </div>;
 }
