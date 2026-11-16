@@ -122,7 +122,7 @@ export async function renderCabinet(query: CabinetQuery, detail?: string) {
           </>}
           {assignments.filter(assignment => detail === assignment.id).map(assignment => <section className="panel" key={assignment.id}><AssignmentHeader assignment={assignment} />
             <details className="material"><summary>Материалы для проведения занятия</summary>
-              <LessonMaterials assignment={assignment} showWorks={false} />
+              <LessonMaterials assignment={assignment} />
               {workSections(assignment).map(({ kind, tasks }) => <section className="lesson-section panel" key={kind}>
                 <h3>{workLabels[kind]}{assignment.content.work?.[kind]?.title ? " · " + assignment.content.work[kind].title : ""}</h3>
                 <FormattedText text={assignment.content.work?.[kind]?.instructions} />

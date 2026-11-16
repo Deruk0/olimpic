@@ -25,7 +25,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         {error === "invite" && <p className="notice error" role="alert">Приглашение недействительно, уже использовано или просрочено.</p>}
         <form action={signIn} className="editor">
           <label>Код приглашения<input required name="invite" autoComplete="off" spellCheck={false} /></label>
-          <Submit>Войти в Olimpik</Submit>
+          <Submit pendingLabel="Входим…">Войти в Olimpik</Submit>
         </form>
       </div>
     </section>

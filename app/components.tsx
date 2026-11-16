@@ -1,17 +1,30 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { createElement, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { mutate } from "./actions";
 import { formats, levels, type Assignment, type Group, type Level, type ProgramKey, type ProgramRow, type Topic } from "../lib/model";
+import { DateField } from "./date-field";
 
 export function Hidden({ name, value }: { name: string; value: string | number }) {
   return <input type="hidden" name={name} value={value} />;
 }
-export function Submit({ children, secondary = false }: { children: ReactNode; secondary?: boolean }) {
+export function Submit({ children, secondary = false, pendingLabel = "Сохранение…" }: { children: ReactNode; secondary?: boolean; pendingLabel?: string }) {
   const { pending } = useFormStatus();
-  return <button disabled={pending} className={secondary ? "secondary" : ""}>{pending ? "Сохранение…" : children}</button>;
+  return <button disabled={pending} className={secondary ? "secondary" : ""}>{pending ? pendingLabel : children}</button>;
 }
+const subscribeToSelectSupport = () => () => {};
+const supportsSelectPicker = () => CSS.supports("appearance: base-select") && CSS.supports("selector(::picker(select))");
+const serverSelectSupport = () => false;
+
+function ScheduleSelect({ children, ...props }: ComponentProps<"select">) {
+  const custom = useSyncExternalStore(subscribeToSelectSupport, supportsSelectPicker, serverSelectSupport);
+  return <select {...props} className="schedule-select">
+    {custom && <button type="button">{createElement("selectedcontent")}</button>}
+    {children}
+  </select>;
+}
+
 export function ScheduleEditor({ groups, programs, assignment }: { groups: Group[]; programs: ProgramRow[]; assignment?: Assignment }) {
   const published = programs.filter(item => item.published);
   const [level, setLevel] = useState(published[0]?.level ?? "");
@@ -24,12 +37,12 @@ export function ScheduleEditor({ groups, programs, assignment }: { groups: Group
     {assignment && <Hidden name="assignment" value={assignment.id} />}
     <div className="formgrid">
       {!assignment && <>
-      <label>Группа<select name="group">{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
-      <label>Программа<select name="level" value={level} onChange={e => setLevel(e.target.value as ProgramKey)}>{published.map(p => <option key={p.level} value={p.level}>{levels[p.level]}</option>)}</select></label>
-      <label>Занятие<select name="lesson" key={level}>{published.find(p => p.level === level)?.published?.lessons.map((lesson, i) => <option key={i} value={i}>{lesson.title}</option>)}</select></label>
+      <label>Группа<ScheduleSelect name="group">{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</ScheduleSelect></label>
+      <label>Программа<ScheduleSelect name="level" value={level} onChange={e => setLevel(e.target.value as ProgramKey)}>{published.map(p => <option key={p.level} value={p.level}>{levels[p.level]}</option>)}</ScheduleSelect></label>
+      <label>Занятие<ScheduleSelect name="lesson" key={level}>{published.find(p => p.level === level)?.published?.lessons.map((lesson, i) => <option key={i} value={i}>{lesson.title}</option>)}</ScheduleSelect></label>
       </>}
-      <label>Дата и время (МСК)<input name="starts" type="datetime-local" defaultValue={starts} required /></label>
-      <label>Формат<select name="format" value={format} onChange={e => setFormat(e.target.value as keyof typeof formats)}>{Object.entries(formats).map(([value, name]) => <option key={value} value={value}>{name}</option>)}</select></label>
+      <DateField label="Дата и время (МСК)" name="starts" withTime defaultValue={starts} />
+      <label>Формат<ScheduleSelect name="format" value={format} onChange={e => setFormat(e.target.value as keyof typeof formats)}>{Object.entries(formats).map(([value, name]) => <option key={value} value={value}>{name}</option>)}</ScheduleSelect></label>
       <label>Длительность, мин<input name="duration" type="number" min={5} max={480} defaultValue={assignment?.settings.duration ?? 90} required /></label>
     </div>
     {format === "online" && <label>Ссылка на видеовстречу<input name="meeting" type="url" defaultValue={assignment?.meeting} placeholder="https://…" required /></label>}
@@ -58,7 +71,8 @@ export function TrajectoryEditor({ student, initial, level: initialLevel, option
     }}><option value="basic">{levels.basic}</option><option value="advanced">{levels.advanced}</option></select></label>
     {topics.map((topic, i) => <div className="topic-edit" key={topic.name}>
       <Hidden name={"topic." + i} value={topic.name} /><b>{i + 1}. {topic.name}</b>
-      <label>Срок<input type="date" name={"due." + i} required value={topic.due} onChange={e => setTopics(topics.map((t, j) => j === i ? { ...t, due: e.target.value } : t))} /></label>
+      <DateField label="Срок" name={"due." + i} value={topic.due}
+        onChange={due => setTopics(current => current.map((t, j) => j === i ? { ...t, due } : t))} />
       <div className="controls">
         <button type="button" className="secondary" aria-label="Поднять тему" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
         <button type="button" className="secondary" aria-label="Опустить тему" disabled={i === topics.length - 1} onClick={() => move(i, 1)}>↓</button>

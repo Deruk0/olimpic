@@ -10,7 +10,7 @@
 .statistics-statuses { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; margin: 1rem 0; }
 .statistics-statuses > div { display: grid; gap: .2rem; padding: .8rem; border-radius: 10px; background: var(--soft); }
 .statistics-statuses strong { font-size: 1.5rem; }
-.statistics-deadlines { padding: 1rem; border-radius: 10px; background: #fff4e5; color: #74480d; }
+.statistics-deadlines { padding: 1rem; border-radius: 10px; background: var(--warning-bg); color: var(--warning); }
 .statistics-deadlines h3 { margin: 0; }
 .statistics-topics, .statistics-history { list-style: none; padding: 0; margin-bottom: 0; }
 .statistics-topics li, .statistics-history li { border-top: 1px solid var(--line); padding: 1rem 0; }

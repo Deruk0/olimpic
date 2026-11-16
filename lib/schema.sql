@@ -1,4 +1,15 @@
 CREATE TABLE IF NOT EXISTS accounts(id text PRIMARY KEY, name text NOT NULL, role text NOT NULL CHECK(role IN ('student','curator','methodist')), goal text NOT NULL DEFAULT '');
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS theme text NOT NULL DEFAULT 'light' CHECK(theme IN ('light','dark'));
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS theme_palette text NOT NULL DEFAULT 'purple' CHECK(theme_palette IN ('purple','blue','turquoise'));
+UPDATE accounts SET theme='light', theme_palette='blue' WHERE theme='blue';
+CREATE TABLE IF NOT EXISTS student_avatars(account text PRIMARY KEY REFERENCES accounts ON DELETE CASCADE, version text NOT NULL, bytes bytea NOT NULL);
+CREATE TABLE IF NOT EXISTS student_goal_profiles(
+  student text PRIMARY KEY REFERENCES accounts ON DELETE CASCADE,
+  details jsonb NOT NULL,
+  image bytea,
+  image_version text,
+  CHECK ((image IS NULL) = (image_version IS NULL))
+);
 CREATE TABLE IF NOT EXISTS invites(hash text PRIMARY KEY, account text NOT NULL REFERENCES accounts, expires timestamptz NOT NULL, used timestamptz);
 CREATE TABLE IF NOT EXISTS sessions(hash text PRIMARY KEY, account text NOT NULL REFERENCES accounts, expires timestamptz NOT NULL);
 CREATE TABLE IF NOT EXISTS groups(id text PRIMARY KEY, name text NOT NULL, curator text NOT NULL REFERENCES accounts);

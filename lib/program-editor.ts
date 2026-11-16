@@ -1,5 +1,5 @@
 import type { Lesson, Material, Program, ProgramKey, Task, WorkKind, WorkSettings } from "./model";
-import { exceedsTextLimit } from "../app/rich-document";
+import { exceedsTextLimit, hasIncompleteFormula } from "../app/rich-document";
 import { workKind, workKinds, workLabels } from "./work";
 
 function record(value: unknown): Record<string, unknown> {
@@ -18,6 +18,7 @@ export function parseProgram(raw: string, level: ProgramKey, publish: boolean): 
   function field(value: unknown, max: number, label: string, required = true, formatted = false) {
     const text = typeof value === "string" ? (formatted ? value.trimEnd() : value.trim()) : "";
     if ((formatted ? exceedsTextLimit(text, max) : text.length > max) || (publish && required && !text.trim())) throw Error(label + " — заполните поле (до " + max + " символов).");
+    if (publish && formatted && hasIncompleteFormula(text)) throw Error(label + " — заполните или удалите незавершённую формулу.");
     return text;
   }
   function number(value: unknown, min: number, max: number, label: string) {

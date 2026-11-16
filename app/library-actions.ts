@@ -1,5 +1,5 @@
 "use server";
-import { exceedsTextLimit } from "./rich-document";
+import { exceedsTextLimit, hasIncompleteFormula } from "./rich-document";
 
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
@@ -14,8 +14,9 @@ type Result = { error: string };
 class FormError extends Error {}
 const field = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
 const rich = (form: FormData, name: string) => String(form.get(name) ?? "").trimEnd();
-function limited(value: string, max: number, label: string, required = false) {
+function limited(value: string, max: number, label: string, required = false, checkFormulas = false) {
   if (exceedsTextLimit(value, max) || (required && !value)) throw new FormError(label + " — заполните поле (до " + max + " символов).");
+  if (checkFormulas && hasIncompleteFormula(value)) throw new FormError(label + " — заполните или удалите незавершённую формулу.");
   return value;
 }
 function count(value: string, low: number, high: number, label: string) {
@@ -64,19 +65,19 @@ export async function saveLibrary(_previous: Result, form: FormData): Promise<Re
       if (theoryId && !await first("SELECT id FROM library_items WHERE id=$1 AND kind='theory'", [theoryId])) throw new FormError("Связанная теория недоступна. Выберите другую или оставьте поле пустым.");
       const response = field(form, "response") as Task["response"];
       if (!response || !["file", "text", "single", "multiple"].includes(response)) throw new FormError("Выберите формат ответа.");
-      const options = response === "single" || response === "multiple" ? form.getAll("option").map(value => limited(String(value).trim(), 500, "Вариант ответа", ready)) : [];
+      const options = response === "single" || response === "multiple" ? form.getAll("option").map(value => limited(String(value).trim(), 500, "Вариант ответа", ready, ready)) : [];
       const correct = options.length ? [...new Set(form.getAll("correct").map(Number))] : [];
       if (options.length > 12 || correct.some(index => !Number.isInteger(index) || index < 0 || index >= options.length) ||
         (ready && (response === "single" || response === "multiple") && (options.length < 2 || new Set(options).size !== options.length || !correct.length || (response === "single" && correct.length !== 1)))) throw new FormError("Добавьте разные варианты и отметьте правильные ответы.");
       data = {
         title, topic: limited(field(form, "topic"), 100, "Тема", ready),
-        prompt: limited(rich(form, "prompt"), 5000, "Условие", ready),
+        prompt: limited(rich(form, "prompt"), 5000, "Условие", ready, ready),
         max: count(field(form, "max"), 1, 100, "Баллы"),
-        hint: limited(rich(form, "hint"), 3000, "Подсказка"),
-        solution: limited(rich(form, "solution"), 6000, "Разбор"),
-        rubric: limited(rich(form, "rubric"), 5000, "Критерии проверки"),
+        hint: limited(rich(form, "hint"), 3000, "Подсказка", false, ready),
+        solution: limited(rich(form, "solution"), 6000, "Разбор", false, ready),
+        rubric: limited(rich(form, "rubric"), 5000, "Критерии проверки", false, ready),
         response, options, correct,
-        modelAnswer: limited(rich(form, "modelAnswer"), 8000, "Образец ответа"),
+        modelAnswer: limited(rich(form, "modelAnswer"), 8000, "Образец ответа", false, ready),
         hiddenSections: optionalTaskSections.filter(section => form.has("hide." + section)),
         theoryId: theoryId || undefined
       };
@@ -95,7 +96,7 @@ export async function saveLibrary(_previous: Result, form: FormData): Promise<Re
         for (const section of hiddenSections) delete task[section];
         return { id: taskId, task };
       });
-      const settings: WorkSettings = { instructions: limited(rich(form, "instructions"), 5000, "Инструкция") };
+      const settings: WorkSettings = { instructions: limited(rich(form, "instructions"), 5000, "Инструкция", false, ready) };
       if (workKind === "homework") settings.dueDays = optionalCount(form, "dueDays", 1, 90, "Срок в днях");
       if (workKind === "assessment") {
         settings.minutes = optionalCount(form, "minutes", 1, 480, "Рекомендуемое время");

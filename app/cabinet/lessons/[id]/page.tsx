@@ -12,6 +12,6 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
   if (!assignment) notFound();
   return <CabinetFrame user={user} view="schedule" title={assignment.content.title}>
     <p><Link href={"/cabinet/schedule?focus=" + encodeURIComponent(id) + "#lesson-" + encodeURIComponent(id)}>← К расписанию</Link></p>
-    <LessonMaterials assignment={assignment} />
+    <LessonMaterials assignment={assignment} studentView />
   </CabinetFrame>;
 }

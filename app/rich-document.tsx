@@ -1,6 +1,13 @@
 import type { CSSProperties, ReactNode } from "react";
+import { formulaSource, formulaTextLength, readFormulaFields } from "../lib/formula-presets";
+import { MathFormula, renderFormula } from "./math-formula";
 
 const prefix = "olimpik-rich:";
+export type UnderlineStyle = "solid" | "double" | "dashed";
+export function readUnderlineStyle(value: unknown): UnderlineStyle {
+  return value === "double" || value === "dashed" ? value : "solid";
+}
+
 export type RichNode = { type?: string; text?: string; attrs?: Record<string, unknown>; marks?: RichNode[]; content?: RichNode[] };
 export function readRich(value: string): RichNode | null {
   if (!value.startsWith(prefix)) return null;
@@ -17,8 +24,24 @@ export function exceedsTextLimit(value: string, max: number) {
   while (stack.length) {
     const node = stack.pop();
     if (typeof node?.text === "string") length += node.text.length;
+    if (node?.type === "mathFormula") {
+      const source = formulaSource(node.attrs);
+      const form = readFormulaFields(node.attrs);
+      length += source.length || (form ? formulaTextLength(form) : 0);
+    }
     if (length > max) return true;
     if (Array.isArray(node?.content)) for (const child of node.content) stack.push(child);
+  }
+  return false;
+}
+export function hasIncompleteFormula(value: string) {
+  const doc = readRich(value);
+  if (!doc) return false;
+  const stack = [doc];
+  while (stack.length) {
+    const node = stack.pop();
+    if (node?.type === "mathFormula" && node.attrs?.preset != null && !renderFormula(formulaSource(node.attrs), node.attrs.display === true)) return true;
+    if (Array.isArray(node?.content)) stack.push(...node.content);
   }
   return false;
 }
@@ -54,7 +77,7 @@ function render(node: RichNode, key: number, depth: number): ReactNode {
         const href = mark.attrs?.href;
         if (mark.type === "bold") text = <strong>{text}</strong>;
         if (mark.type === "italic") text = <em>{text}</em>;
-        if (mark.type === "underline") text = <u>{text}</u>;
+        if (mark.type === "underline") text = <u style={{ textDecorationStyle: readUnderlineStyle(mark.attrs?.style) }}>{text}</u>;
         if (mark.type === "strike") text = <s>{text}</s>;
         if (mark.type === "highlight") text = <mark>{text}</mark>;
         if (mark.type === "code") text = <code>{text}</code>;
@@ -81,6 +104,10 @@ function render(node: RichNode, key: number, depth: number): ReactNode {
     }
     case "hardBreak": return <br key={key}/>;
     case "horizontalRule": return <hr key={key}/>;
+    case "mathFormula": {
+      const latex = formulaSource(node.attrs);
+      return latex ? <MathFormula key={key} latex={latex} display={node.attrs?.display === true} /> : null;
+    }
     case "codeBlock": return <pre key={key}>{children}</pre>;
     case "image": {
       const src = node.attrs?.src;

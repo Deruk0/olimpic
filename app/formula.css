@@ -1,0 +1,179 @@
+.math-formula {
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+  vertical-align: middle;
+}
+.math-formula-display { display: block; margin-block: .45rem; }
+.math-formula-display .katex-display { margin: .25em 0; }
+.formula-editable {
+  display: inline-block;
+  vertical-align: middle;
+  padding: 2px;
+  border-radius: 4px;
+}
+.formula-editable-display { display: block; text-align: center; margin-block: .45rem; }
+.visual-text .ProseMirror-selectednode:has(.formula-editable:focus-within) { outline: none; }
+.formula-shape {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font: 1.1em/1.25 KaTeX_Main, "Times New Roman", serif;
+  white-space: nowrap;
+}
+.formula-slot {
+  position: relative;
+  display: inline-grid;
+  align-items: center;
+  min-width: 1.35em;
+  min-height: 1.45em;
+  padding: 0 2px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-align: center;
+}
+.formula-slot[data-empty], .formula-slot:hover { border-color: var(--control-line); }
+.formula-slot[data-empty] { background: var(--surface); border-style: dashed; }
+.formula-slot:focus-within { border-color: var(--focus); background: var(--panel); }
+.formula-slot:has(input[aria-invalid=true]) { border-color: var(--danger); }
+.visual-editor .visual-text .formula-slot > input[type=text] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  opacity: 0;
+  font: inherit;
+  text-align: center;
+}
+.formula-slot:focus-within > .formula-slot-view { display: none; }
+.visual-editor .visual-text .formula-slot > input[type=text]:focus {
+  position: static;
+  width: auto;
+  min-width: 1.15em;
+  max-width: min(16rem, 55vw);
+  field-sizing: content;
+  opacity: 1;
+}
+.formula-slot-view .katex { font-size: 1em; }
+.formula-composite { display: inline-flex; align-items: center; justify-content: center; }
+.formula-nested { display: inline-flex; align-items: center; }
+.formula-composite > .formula-composite-text { min-width: 0; padding: 0; border: 0; border-radius: 0; }
+.formula-composite-text:focus-within:not([data-empty]) { outline: 1px solid var(--focus); outline-offset: 1px; }
+.formula-composite > .formula-composite-text[data-empty] {
+  flex: none;
+  align-self: stretch;
+  width: 0;
+  min-height: 0;
+  background: transparent;
+}
+.formula-composite-text[data-empty] > .formula-slot-view { display: none; }
+.visual-editor .visual-text .formula-composite-text[data-empty] > input[type=text] {
+  position: absolute;
+  inset: 50% auto auto 0;
+  width: 8px;
+  min-width: 0;
+  height: 1.2em;
+  padding-inline-start: 4px;
+  transform: translate(-50%, -50%);
+  field-sizing: fixed;
+  cursor: text;
+  z-index: 1;
+}
+.visual-editor .visual-text .formula-composite-text[data-empty]:is(:first-child, :last-child) > input[type=text] {
+  transform: translateY(-50%);
+  padding-inline-start: 0;
+}
+.visual-editor .visual-text .formula-composite-text[data-empty]:first-child > input[type=text] {
+  inset-inline-start: -8px;
+  padding-inline-start: 7px;
+}
+.formula-shape-root { display: inline-grid; grid-template-columns: auto .7em auto; gap: 0; align-items: stretch; }
+.formula-root-degree { align-self: start; font-size: .7em; }
+.formula-root-sign { background: currentColor; clip-path: polygon(0 60%, 25% 54%, 45% 85%, 88% 0, 100% 0, 48% 100%, 38% 100%, 17% 62%, 0 67%); }
+.formula-root-body { display: flex; align-items: center; min-height: 1.7em; border-top: 1px solid currentColor; }
+.formula-shape-fraction, .formula-sum-limits { display: inline-grid; text-align: center; justify-items: center; }
+.formula-shape-fraction { font-size: .94em; }
+.formula-shape-fraction > .formula-numerator { border-bottom: 1px solid currentColor; border-radius: 4px 4px 0 0; justify-self: stretch; }
+.formula-super, .formula-sub, .formula-sum-limits > .formula-slot { font-size: .72em; }
+.formula-super { align-self: start; transform: translateY(-.3em); }
+.formula-sub { align-self: end; transform: translateY(.35em); }
+.formula-shape-power, .formula-shape-subscript { padding-block: .3em; }
+.formula-shape-matrix, .formula-shape-system { align-items: stretch; gap: .25em; padding-block: .12em; }
+.formula-grid-fields { display: grid; gap: 3px 5px; align-self: center; }
+.formula-shape-matrix > .formula-grid-fields > .formula-slot { min-width: 1.6em; }
+.visual-editor .visual-text .formula-shape-matrix > .formula-grid-fields > .formula-slot > input[type=text]:focus { max-width: min(10rem, 44vw); }
+.formula-shape-system > .formula-grid-fields > .formula-slot { min-width: 4em; text-align: start; }
+.formula-shape-system > .formula-grid-fields > .formula-composite { justify-content: start; }
+.visual-editor .visual-text .formula-shape-system > .formula-grid-fields > .formula-slot > input[type=text] { text-align: start; }
+.formula-matrix-bracket { width: .44em; border: 1px solid currentColor; border-inline-end: 0; border-radius: 100% 0 0 100% / 50% 0 0 50%; }
+.formula-matrix-bracket:last-child { transform: scaleX(-1); }
+.formula-system-brace { display: grid; grid-template-rows: repeat(4, 1fr); width: .6em; }
+.formula-system-brace i { box-sizing: border-box; width: 50%; border: 0 solid currentColor; }
+.formula-system-brace i:nth-child(1) { margin-left: 50%; border-top-width: 1px; border-left-width: 1px; border-top-left-radius: 100%; }
+.formula-system-brace i:nth-child(2) { border-bottom-width: 1px; border-right-width: 1px; border-bottom-right-radius: 100%; }
+.formula-system-brace i:nth-child(3) { border-top-width: 1px; border-right-width: 1px; border-top-right-radius: 100%; }
+.formula-system-brace i:nth-child(4) { margin-left: 50%; border-bottom-width: 1px; border-left-width: 1px; border-bottom-left-radius: 100%; }
+.formula-size-tools { display: grid; gap: 4px; grid-column: 1 / -1; flex-basis: 100%; }
+.formula-size-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 3px; align-items: center; font-size: .75rem; }
+.formula-size-row > span { min-width: 0; color: var(--sub); }
+.formula-size-row > button { min-height: 28px; width: 24px; padding: 0; background: var(--panel); color: var(--ink); border-color: var(--line); }
+.formula-size-row > button:hover:enabled { background: var(--soft); filter: none; }
+.formula-paste-notice { display: block; max-width: 17rem; color: var(--danger); white-space: normal; }
+.editor-layout .math-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 6px;
+}
+.formula-tool-group { display: grid; gap: 4px; min-width: 0; padding-block: 4px; }
+.formula-tool-group + .formula-tool-group { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; }
+.formula-palette {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: 4px;
+}
+.formula-palette > button, .formula-display-toggle {
+  min-width: 0;
+  min-height: 36px;
+  padding: 2px;
+  color: var(--ink);
+  background: var(--panel);
+  border-color: var(--line);
+  font-size: .85rem;
+}
+.formula-display-toggle { font-size: .75rem; }
+.formula-palette > button:hover:enabled, .formula-display-toggle:hover { background: var(--soft); filter: none; }
+.formula-display-toggle[aria-pressed=true] { border-color: var(--focus); background: var(--soft); color: var(--deep); }
+.formula-symbols > button { font: 1rem/1.2 KaTeX_Main, "Times New Roman", serif; }
+@container (width < 43rem) {
+  .formula-basic { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@container (min-width: 43rem) {
+  .formula-symbols { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .formula-symbols > button { min-height: 30px; }
+}
+.formula-differential, .formula-limit-target { display: inline-flex; align-items: center; gap: 2px; }
+.formula-differential { padding-inline-start: .2em; }
+.formula-limit-operator { display: grid; justify-items: center; }
+.formula-limit-target { font-size: .72em; }
+.formula-shape-log { padding-bottom: .25em; }
+.formula-shape-binomial { align-items: stretch; }
+.formula-vector-arrow { position: relative; padding-top: .2em; border-top: 1px solid currentColor; }
+.formula-vector-arrow::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  right: 0;
+  width: .24em;
+  height: .24em;
+  border-top: 1px solid currentColor;
+  border-right: 1px solid currentColor;
+  transform: translateY(-40%) rotate(45deg);
+  pointer-events: none;
+}

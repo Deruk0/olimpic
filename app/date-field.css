@@ -1,0 +1,42 @@
+.date-field { display: grid; align-content: start; gap: .5rem; width: 100%; min-width: 0; }
+.date-field-input { position: relative; }
+.editor .date-field-input input { display: block; height: 44px; padding-inline-end: 2.65rem; }
+.date-field-input input::-webkit-calendar-picker-indicator { display: none; }
+.date-field-input > .date-field-trigger {
+  position: absolute;
+  inset: 4px 4px 4px auto;
+  width: 36px;
+  min-height: 0;
+  padding: 0;
+  background: var(--soft);
+  color: var(--accent);
+}
+.date-field-dialog {
+  width: min(100% - 1.5rem, 22rem);
+  padding: 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 12px 36px #29145026;
+}
+.date-field-dialog::backdrop { background: #231b3652; }
+.date-field-dialog .rdp-root {
+  --rdp-accent-color: var(--accent);
+  --rdp-accent-background-color: var(--soft);
+  --rdp-day-height: 39px;
+  --rdp-day-width: 39px;
+  --rdp-day_button-height: 36px;
+  --rdp-day_button-width: clamp(27px, 10vw, 36px);
+  --rdp-day_button-border-radius: 9px;
+  --rdp-selected-border: 0;
+}
+.date-field-dialog .rdp-months, .date-field-dialog .rdp-month, .date-field-dialog .rdp-month_grid { width: 100%; max-width: none; }
+.date-field-dialog .rdp-day { width: auto; }
+.date-field-dialog :is(.rdp-day_button, .rdp-button_previous, .rdp-button_next) { min-height: 0; }
+.date-field-dialog .rdp-day_button:hover { background: var(--soft); filter: none; }
+.date-field-dialog .rdp-selected .rdp-day_button { background: var(--accent); color: var(--on-accent); font-size: 1rem; }
+.date-field-dialog .rdp-weekday { color: var(--sub); font-size: .8rem; }
+.date-field-dialog .rdp-caption_label { font-size: .98rem; font-weight: 700; text-transform: capitalize; }
+.date-field-time { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin-top: .8rem; }
+.date-field-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .55rem; margin-top: 1rem; }

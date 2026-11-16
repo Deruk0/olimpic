@@ -9,10 +9,10 @@ import TaskItem from "@tiptap/extension-task-item";
 import Highlight from "@tiptap/extension-highlight";
 import TextAlign from "@tiptap/extension-text-align";
 import Image from "@tiptap/extension-image";
-import { Fragment } from "@tiptap/pm/model";
-import { Selection } from "@tiptap/pm/state";
 import { FormattedText } from "./formatted-text";
-import { readRich, safeHref, writeRich } from "./rich-document";
+import { FormulaNode, FormulaTools } from "./formula-editor";
+import { exceedsTextLimit, readRich, readUnderlineStyle, safeHref, writeRich, type UnderlineStyle } from "./rich-document";
+import { EditorTableView, TableInsert, TableToolbar } from "./table-editor";
 import { TextIcon } from "./text-icons";
 
 const Indent = Extension.create({
@@ -25,10 +25,28 @@ const Indent = Extension.create({
     } } }];
   }
 });
+const UnderlineStyles = Extension.create({
+  name: "olimpikUnderlineStyles",
+  addGlobalAttributes() {
+    return [{
+      types: ["underline"],
+      attributes: {
+        style: {
+          default: "solid",
+          parseHTML: element => readUnderlineStyle(element.style.textDecorationStyle),
+          renderHTML: attrs => {
+            const style = readUnderlineStyle(attrs.style);
+            return style === "solid" ? {} : { style: "text-decoration-style: " + style };
+          },
+        },
+      },
+    }];
+  },
+});
 const extensions = [
   StarterKit.configure({ link: { openOnClick: false, isAllowedUri: safeHref }, heading: { levels: [1, 2] } }),
-  TableKit.configure({ table: { resizable: true, allowTableNodeSelection: true } }),
-  TaskList, TaskItem.configure({ nested: true }), Highlight, Indent,
+  TableKit.configure({ table: { resizable: true, allowTableNodeSelection: true, cellMinWidth: 76, View: EditorTableView } }),
+  TaskList, TaskItem.configure({ nested: true }), Highlight, Indent, UnderlineStyles,
   TextAlign.configure({ types: ["paragraph", "heading"], alignments: ["left", "center", "right"] }),
   Image.configure({ allowBase64: false })
 ];
@@ -45,32 +63,42 @@ export function TextEditor({ label, name, value, onChange, maxLength, rows = 4 }
   const [uploading, setUploading] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [href, setHref] = useState("");
+  const [tableSetup, setTableSetup] = useState<HTMLDivElement | null>(null);
   const editor = useEditor({
     immediatelyRender: false,
-    extensions,
+    extensions: [...extensions, FormulaNode],
     editorProps: { attributes: { role: "textbox", "aria-multiline": "true", "aria-labelledby": id } },
     onUpdate({ editor }) {
       const doc = editor.getJSON();
       const next = editor.isEmpty ? "" : writeRich(doc);
-      if (editor.getText().length > maxLength || next.length > maxLength * 8 + 6000) {
-        if (accepted.current) editor.commands.setContent(accepted.current, { emitUpdate: false });
+      if (exceedsTextLimit(next, maxLength)) {
+        if (accepted.current) editor.chain().setMeta("addToHistory", false).setContent(accepted.current, { emitUpdate: false }).run();
         setNotice("Достигнут лимит поля.");
         return;
       }
       accepted.current = doc;
       last.current = next;
+      setNotice(current => current === "Достигнут лимит поля." ? "" : current);
       onChange(next);
     }
   });
   useEffect(() => {
     if (!editor || last.current === value) return;
-    editor.commands.setContent((readRich(value) as JSONContent | null) ?? legacy.current?.innerHTML ?? "", { emitUpdate: false });
-    accepted.current = editor.getJSON();
-    last.current = value;
+    let cancelled = false;
+    // Tiptap mounts React node views synchronously when replacing editor content.
+    queueMicrotask(() => {
+      if (cancelled || editor.isDestroyed || last.current === value) return;
+      const content = (readRich(value) as JSONContent | null) ?? legacy.current?.innerHTML ?? "";
+      editor.chain().setMeta("addToHistory", false).setContent(content, { emitUpdate: false }).run();
+      accepted.current = editor.getJSON();
+      last.current = value;
+    });
+    return () => { cancelled = true; };
   }, [editor, value]);
   const active = useEditorState({ editor, selector: ({editor}) => ({
-    table: !!editor?.isActive("table"), bold: !!editor?.isActive("bold"), italic: !!editor?.isActive("italic"),
-    underline: !!editor?.isActive("underline"), strike: !!editor?.isActive("strike"),
+    undo: !!editor?.can().undo(), bold: !!editor?.isActive("bold"), italic: !!editor?.isActive("italic"),
+    underline: ["solid", "double", "dashed"].find(style => editor?.isActive("underline", { style })),
+    strike: !!editor?.isActive("strike"),
     alignment: ["left","center","right"].find(value => editor?.isActive({ textAlign: value })) ?? "left"
   }) });
   function indent(step: number) {
@@ -86,22 +114,6 @@ export function TextEditor({ label, name, value, onChange, maxLength, rows = 4 }
       }
     });
     if (tr.docChanged) editor.view.dispatch(tr);
-    editor.commands.focus();
-  }
-  function moveTable(step: number) {
-    if (!editor) return;
-    const { doc, tr, selection } = editor.state;
-    const index = selection.$from.index(0);
-    if (index + step < 0 || index + step >= doc.childCount || doc.maybeChild(index)?.type.name !== "table") return;
-    const left = Math.min(index, index + step);
-    let pos = 0;
-    for (let i = 0; i < left; i++) pos += doc.child(i).nodeSize;
-    const first = doc.child(left), second = doc.child(left + 1);
-    const tableStart = step < 0 ? pos + first.nodeSize : pos;
-    const offset = Math.max(1, selection.from - tableStart);
-    tr.replaceWith(pos, pos + first.nodeSize + second.nodeSize, Fragment.fromArray([second, first]));
-    tr.setSelection(Selection.near(tr.doc.resolve((step < 0 ? pos : pos + second.nodeSize) + offset), 1));
-    editor.view.dispatch(tr.scrollIntoView());
     editor.commands.focus();
   }
   async function attach(file?: File) {
@@ -122,39 +134,39 @@ export function TextEditor({ label, name, value, onChange, maxLength, rows = 4 }
     } catch { setNotice("Файл не удалось загрузить."); }
     finally { setUploading(false); }
   }
+  const toggleUnderline = (style: UnderlineStyle) => editor?.chain().focus().toggleMark("underline", { style }).run();
   const tool = (icon: string, title: string, run: () => unknown, pressed?: boolean, disabled = !editor) =>
     <button type="button" title={title} aria-label={title} aria-pressed={pressed} disabled={disabled} onMouseDown={event => event.preventDefault()} onClick={run}><TextIcon name={icon} /></button>;
   return <div className="text-editor visual-editor">
     <label id={id} onClick={() => editor?.commands.focus()}>{label}</label>
-    <EditorContent className="visual-text" style={{ minHeight: (rows === 2 ? 7 : Math.max(17, rows * 2)) + "rem" }} editor={editor} />
-    <div className="text-tools" role="group" aria-label="Форматирование текста">
-      {tool("B","Жирный",() => editor?.chain().focus().toggleBold().run(),active?.bold)}
-      {tool("I","Курсив",() => editor?.chain().focus().toggleItalic().run(),active?.italic)}
-      {tool("U","Подчёркнутый",() => editor?.chain().focus().toggleUnderline().run(),active?.underline)}
-      {tool("S","Зачёркнутый",() => editor?.chain().focus().toggleStrike().run(),active?.strike)}
-      {tool("align-left","По левому краю",() => editor?.chain().focus().setTextAlign("left").run(),active?.alignment === "left")}
-      {tool("align-center","По центру",() => editor?.chain().focus().setTextAlign("center").run(),active?.alignment === "center")}
-      {tool("align-right","По правому краю",() => editor?.chain().focus().setTextAlign("right").run(),active?.alignment === "right")}
-      {tool("H1","Заголовок",() => editor?.chain().focus().toggleHeading({level:1}).run())}
-      {tool("H2","Подзаголовок",() => editor?.chain().focus().toggleHeading({level:2}).run())}
-      {tool("•","Маркированный список",() => editor?.chain().focus().toggleBulletList().run())}
-      {tool("1.","Нумерованный список",() => editor?.chain().focus().toggleOrderedList().run())}
-      {tool("❝","Цитата",() => editor?.chain().focus().toggleBlockquote().run())}
-      {tool("left","Уменьшить отступ",() => indent(-1))}
-      {tool("right","Увеличить отступ",() => indent(1))}
-      {tool("link","Ссылка",() => { setHref(editor?.getAttributes("link").href ?? ""); setLinkOpen(true); })}
-      {tool("file","Прикрепить файл",() => upload.current?.click(),undefined,!editor || uploading)}
-      {tool("table","Таблица",() => editor?.chain().focus().insertTable({rows:3,cols:3,withHeaderRow:true}).run())}
+    <div className="editor-layout">
+      <FormulaTools editor={editor} />
+      <EditorContent className="visual-text" style={{ minHeight: (rows === 2 ? 7 : Math.max(17, rows * 2)) + "rem" }} editor={editor} />
+      <div className="text-tools format-tools" role="group" aria-label="Форматирование текста">
+        {tool("B","Жирный",() => editor?.chain().focus().toggleBold().run(),active?.bold)}
+        {tool("I","Курсив",() => editor?.chain().focus().toggleItalic().run(),active?.italic)}
+        {tool("S","Зачёркнутый",() => editor?.chain().focus().toggleStrike().run(),active?.strike)}
+        {tool("U", "Обычное подчёркивание", () => toggleUnderline("solid"), active?.underline === "solid")}
+        {tool("U-double", "Двойное подчёркивание", () => toggleUnderline("double"), active?.underline === "double")}
+        {tool("U-dashed", "Прерывистое подчёркивание", () => toggleUnderline("dashed"), active?.underline === "dashed")}
+        {tool("align-left","По левому краю",() => editor?.chain().focus().setTextAlign("left").run(),active?.alignment === "left")}
+        {tool("align-center","По центру",() => editor?.chain().focus().setTextAlign("center").run(),active?.alignment === "center")}
+        {tool("align-right","По правому краю",() => editor?.chain().focus().setTextAlign("right").run(),active?.alignment === "right")}
+        {tool("H1","Заголовок",() => editor?.chain().focus().toggleHeading({level:1}).run())}
+        {tool("H2","Подзаголовок",() => editor?.chain().focus().toggleHeading({level:2}).run())}
+        {tool("•","Маркированный список",() => editor?.chain().focus().toggleBulletList().run())}
+        {tool("1.","Нумерованный список",() => editor?.chain().focus().toggleOrderedList().run())}
+        {tool("❝","Цитата",() => editor?.chain().focus().toggleBlockquote().run())}
+        {tool("left","Уменьшить отступ",() => indent(-1))}
+        {tool("right","Увеличить отступ",() => indent(1))}
+        {tool("link","Ссылка",() => { setHref(editor?.getAttributes("link").href ?? ""); setLinkOpen(true); })}
+        {tool("file","Прикрепить файл",() => upload.current?.click(),undefined,!editor || uploading)}
+        <TableInsert editor={editor} panel={tableSetup} />
+        {tool("undo", "Отменить последнее изменение", () => editor?.chain().focus().undo().run(), undefined, !active?.undo)}
+      </div>
+      <div className="table-setup" ref={setTableSetup} />
     </div>
-    {active?.table && <div className="controls table-actions" aria-label="Настройки таблицы">
-      <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>editor?.chain().focus().addRowAfter().run()}>+ Строка</button>
-      <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>editor?.chain().focus().addColumnAfter().run()}>+ Столбец</button>
-      <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>editor?.chain().focus().deleteRow().run()}>− Строка</button>
-      <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>editor?.chain().focus().deleteColumn().run()}>− Столбец</button>
-      <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>moveTable(-1)}>Таблицу выше</button>
-      <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>moveTable(1)}>Таблицу ниже</button>
-      <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>editor?.chain().focus().deleteTable().run()}>Удалить таблицу</button>
-    </div>}
+    <TableToolbar editor={editor} />
     {linkOpen && <div className="controls text-link-editor"><input aria-label="Адрес ссылки" value={href} placeholder="https://…" onChange={e=>setHref(e.target.value)}/>
       <button type="button" onClick={() => {
         const address = href.trim();

@@ -87,7 +87,7 @@ function ScheduleCardView({ card, index, now, focus, featured = false }: {
     <details className="schedule-materials">
       <summary>
         <span className="schedule-materials-heading"><InterfaceIcon name="library" /><span>Материалы занятия<small>Теория{card.works.length ? " и учебные работы" : ""}{card.settings.recording ? " · запись урока" : ""}</small></span></span>
-        <span className="schedule-materials-chevron" aria-hidden="true">⌄</span>
+        <span className="schedule-materials-chevron"><InterfaceIcon name="chevronDown" /></span>
       </summary>
       <div className="schedule-material-grid">
         <section className="schedule-material-section">
