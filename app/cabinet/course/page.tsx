@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { requireAccount } from "../../../lib/auth";
-import { rows } from "../../../lib/db";
 import { workPath } from "../../../lib/paths";
 import { studentAssignments, studentWorks } from "../../../lib/student";
 import { workLabels, workStates } from "../../../lib/work";
@@ -10,25 +9,16 @@ import "./statistics.css";
 const date = new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeZone: "Europe/Moscow" });
 const percent = (value: number, total: number) => total ? Math.round(value / total * 100) : 0;
 
-export default async function CoursePage({ searchParams }: { searchParams: Promise<{ scope?: string }> }) {
+export default async function CoursePage() {
   const user = await requireAccount("student");
-  const [assignments, attendance, query] = await Promise.all([
-    studentAssignments(user.id),
-    rows<{ assignment: string }>("SELECT t.assignment FROM attendance t JOIN assignments a ON a.id=t.assignment JOIN members m ON m.group_id=a.group_id AND m.student=t.student WHERE t.student=$1 AND a.deleted_at IS NULL", [user.id]),
-    searchParams
-  ]);
-  const diagnostic = query.scope === "diagnostic";
-  const selected = assignments.filter(a => (a.kind === "diagnostic") === diagnostic);
+  const assignments = await studentAssignments(user.id);
   const now = Date.now();
-  const works = studentWorks(selected);
-  const started = works.filter(w => w.assignment.starts.getTime() <= now);
+  const works = studentWorks(assignments, now);
+  const started = works.filter(w => new Date(w.assignment.starts).getTime() <= now);
   const pending = started.filter(w => w.state === "pending");
   const awaiting = started.filter(w => w.state === "awaiting");
   const reviewed = started.filter(w => w.state === "reviewed");
-  const overdue = pending.filter(({ assignment, kind }) => {
-    const days = assignment.content.work?.[kind]?.dueDays;
-    return kind === "homework" && days !== undefined && assignment.starts.getTime() + days * 86_400_000 < now;
-  });
+  const overdue = started.filter(w => w.state === "overdue");
   const topics = new Map<string, { total: number; submitted: number; graded: number; score: number; max: number }>();
   let score = 0;
   let max = 0;
@@ -56,28 +46,19 @@ export default async function CoursePage({ searchParams }: { searchParams: Promi
       topics.set(name, topic);
     }
   }
-  const ended = selected.filter(a => a.settings.format !== "self" && a.starts.getTime() + (a.settings.duration ?? 90) * 60_000 <= now);
-  const attended = new Set(attendance.map(a => a.assignment));
-  const visited = ended.filter(a => attended.has(a.id)).length;
   const orderedTopics = [...topics].sort((a, b) => {
     if (!a[1].graded || !b[1].graded) return Number(!a[1].graded) - Number(!b[1].graded);
     return a[1].score / a[1].max - b[1].score / b[1].max;
   });
   const history = started.filter(w => w.tasks.some(({ index }) => w.assignment.grades?.[index])).toReversed();
   return <CabinetFrame user={user} view="course" title="Моя статистика">
-    <p className="muted">{user.goal || "Подготовка к олимпиаде"} · за всё время</p>
-    <nav className="chips" aria-label="Раздел статистики">
-      <Link href="/cabinet/course" className={!diagnostic ? "active" : ""} aria-current={!diagnostic ? "page" : undefined}>Учебные занятия</Link>
-      <Link href="/cabinet/course?scope=diagnostic" className={diagnostic ? "active" : ""} aria-current={diagnostic ? "page" : undefined}>Диагностика</Link>
-    </nav>
+    <p className="muted">Учебные занятия за всё время</p>
     <div className="statistics-metrics">
       <section className="panel"><h2>Сдано работ</h2><strong>{awaiting.length + reviewed.length}<small> / {started.length}</small></strong>
         <progress value={awaiting.length + reviewed.length} max={started.length || 1} aria-label="Доля сданных работ" />
         <p>По занятиям, которые уже начались</p></section>
       <section className="panel"><h2>Результат</h2><strong>{max ? percent(score, max) + "%" : "—"}</strong>
-        <p>{graded ? score + " из " + max + " баллов · проверено задач " + graded : "Появится после проверки куратором"}</p></section>
-      <section className="panel"><h2>Посещаемость</h2><strong>{ended.length ? percent(visited, ended.length) + "%" : "—"}</strong>
-        <p>{ended.length ? visited + " из " + ended.length + " завершённых занятий отмечены куратором" : "Пока нет завершённых очных или онлайн-занятий"}</p></section>
+        <p>{graded ? score + " из " + max + " баллов · проверено задач " + graded : "Появится после проверки преподавателем"}</p></section>
       <section className="panel"><h2>Сданы задачи</h2><strong>{submitted}<small> / {totalTasks}</small></strong>
         <p>{graded} проверено · {submitted - graded} ожидают проверки</p></section>
     </div>
@@ -112,7 +93,7 @@ export default async function CoursePage({ searchParams }: { searchParams: Promi
             <small>Проверено {checked.length} из {tasks.length} задач</small></div>
           <div className="statistics-history-score"><b>{percent(points, maximum)}%</b><span>{points} / {maximum} б.</span></div>
         </li>;
-      })}</ol> : <p className="muted">Здесь появятся работы с оценками куратора.</p>}
+      })}</ol> : <p className="muted">Здесь появятся работы с оценками преподавателя.</p>}
     </section>
   </CabinetFrame>;
 }

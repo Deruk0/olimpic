@@ -1,92 +1,81 @@
 import { first, rows } from "./db";
-import type { Assignment, Attachment, Grade, LessonSettings, ProgramKey, ProgramRow, Submission, Trajectory, WorkKind } from "./model";
-import { workSections, workStates } from "./work";
+import type { Assignment, Submission, WorkKind } from "./model";
+import { workLabels, workSections, workStates } from "./work";
 
-const studentScope = "FROM assignments a JOIN groups g ON g.id=a.group_id JOIN members m ON m.group_id=g.id AND m.student=$1 LEFT JOIN submissions s ON s.assignment=a.id AND s.student=m.student";
-const projection = "a.*,g.name AS group_name,s.grades,s.answers,COALESCE(s.files,'[]'::jsonb) AS files";
-export type StudentAssignment = Assignment & { starts: Date } & Pick<Submission, "grades" | "files" | "answers">;
+const studentScope = `SELECT a.*,t.name AS teacher_name,l.content->>'title' AS lesson_title,s.grades,s.answers,
+  COALESCE(s.files,'[]'::jsonb) AS files
+  FROM assignments a
+  JOIN accounts t ON t.id=a.teacher_id
+  LEFT JOIN assignments l ON l.id=a.lesson_id
+  LEFT JOIN submissions s ON s.assignment=a.id AND s.student=a.student_id
+  WHERE a.student_id=$1`;
 
-export async function preparationGoal() {
-  const diagnostic = await first<Pick<ProgramRow, "published">>("SELECT published FROM programs WHERE level='diagnostic'");
-  return diagnostic?.published?.olympiad || "";
-}
+export type StudentAssignment = Assignment & { teacher_name: string; lesson_title: string | null } &
+  Pick<Submission, "grades" | "files" | "answers">;
 
 export function studentAssignments(student: string) {
-  return rows<StudentAssignment>("SELECT " + projection + " " + studentScope + " WHERE a.deleted_at IS NULL AND a.starts IS NOT NULL ORDER BY a.starts,a.id", [student]);
+  return rows<StudentAssignment>(studentScope + " ORDER BY a.starts,a.id", [student]);
 }
+
 export function studentAssignment(student: string, assignment: string) {
-  return first<StudentAssignment>("SELECT " + projection + " " + studentScope + " WHERE a.id=$2 AND a.deleted_at IS NULL AND a.starts IS NOT NULL", [student, assignment]);
-}
-export function studentWorks(assignments: StudentAssignment[]) {
-  return assignments.flatMap(assignment => workSections(assignment, assignment).map(work => ({ assignment, ...work })));
+  return first<StudentAssignment>(studentScope + " AND a.id=$2", [student, assignment]);
 }
 
-export type ScheduleWork = { kind: WorkKind; state: keyof typeof workStates; topics: string[]; tasks: { title: string; index: number; completed: boolean }[] };
-export type ScheduleCard = {
-  id: string; kind: Assignment["kind"]; level: ProgramKey; starts: Date; meeting: string;
-  settings: Partial<LessonSettings>; groupName: string; title: string; topic: string;
-  topics: string[]; attended: boolean; works: ScheduleWork[];
-};
-type ScheduleRow = Omit<ScheduleCard, "groupName" | "topics" | "works" | "starts"> & {
-  starts: Date | string; group_name: string;
-  tasks: { title?: string | null; topic?: string | null; kind?: WorkKind | null; phase?: "before" | "after" | null }[];
-  files: Attachment[] | null; grades: (Grade | null)[] | null; answers: Submission["answers"];
+export function studentWorks(assignments: StudentAssignment[], now = Date.now()) {
+  return assignments.flatMap(assignment => workSections(assignment, assignment, now).map(work => ({ assignment, ...work })));
+}
+
+export function studentLessonHomework(student: string, lesson: string) {
+  return rows<StudentAssignment>(studentScope + " AND a.lesson_id=$2 ORDER BY a.due_at,a.id", [student, lesson]);
+}
+
+type ScheduleWork = {
+  assignmentId: string;
+  title: string;
+  kind: WorkKind;
+  state: keyof typeof workStates;
+  tasks: { title: string; index: number; completed: boolean }[];
 };
 
-const scheduleSql = `SELECT a.id, a.kind, a.level, a.starts, a.meeting, a.settings,
-  g.name AS group_name,
-  COALESCE(a.content->>'title', '') AS title,
-  COALESCE(a.content->>'topic', '') AS topic,
-  COALESCE((
-    SELECT jsonb_agg(jsonb_build_object('title', task->>'title', 'topic', task->>'topic', 'kind', task->>'kind', 'phase', task->>'phase') ORDER BY ord)
-    FROM jsonb_array_elements(COALESCE(a.content->'tasks', '[]'::jsonb)) WITH ORDINALITY AS item(task, ord)
-  ), '[]'::jsonb) AS tasks,
-  EXISTS(SELECT 1 FROM attendance t WHERE t.assignment = a.id AND t.student = $1) AS attended,
-  COALESCE((
-    SELECT jsonb_agg(jsonb_build_object('id', '', 'name', '', 'task', (file->>'task')::int))
-    FROM jsonb_array_elements(COALESCE(s.files, '[]'::jsonb)) AS file
-  ), '[]'::jsonb) AS files,
-  CASE WHEN jsonb_typeof(s.grades) = 'array' THEN (
-    SELECT jsonb_agg(CASE WHEN grade = 'null'::jsonb THEN 'null'::jsonb ELSE '{"score":0,"comment":""}'::jsonb END ORDER BY ord)
-    FROM jsonb_array_elements(s.grades) WITH ORDINALITY AS item(grade, ord)
-  ) ELSE NULL END AS grades,
-  COALESCE((
-    SELECT jsonb_object_agg(key, to_jsonb(''::text))
-    FROM jsonb_object_keys(COALESCE(s.answers, '{}'::jsonb)) AS key
-  ), '{}'::jsonb) AS answers
-  FROM assignments a
-  JOIN groups g ON g.id = a.group_id
-  JOIN members m ON m.group_id = g.id AND m.student = $1
-  LEFT JOIN submissions s ON s.assignment = a.id AND s.student = m.student
-  WHERE a.deleted_at IS NULL AND a.starts IS NOT NULL
-  ORDER BY a.starts, a.id`;
+export type ScheduleCard = Pick<Assignment, "id" | "starts" | "settings"> & {
+  teacherName: string;
+  title: string;
+  topics: string[];
+  cancelled: boolean;
+  works: ScheduleWork[];
+};
 
-export async function studentSchedule(student: string) {
-  const [group, list] = await Promise.all([
-    first<{ name: string }>("SELECT g.name FROM groups g JOIN members m ON m.group_id = g.id WHERE m.student = $1", [student]),
-    rows<ScheduleRow>(scheduleSql, [student])
-  ]);
-  const cards = list.map(row => {
-    const tasks = row.tasks.map(task => ({ title: task.title ?? "", prompt: "", topic: task.topic ?? "", max: 0, kind: task.kind ?? undefined, phase: task.phase ?? undefined }));
-    const works = workSections(
-      { kind: row.kind, content: { tasks } } as Assignment,
-      { files: row.files ?? [], grades: row.grades, answers: row.answers ?? {} }
-    ).map(({ kind, state, tasks: section }) => ({
-      kind, state, topics: [...new Set(section.map(({ task }) => task.topic).filter(Boolean))],
-      tasks: section.map(({ task, index }) => ({
-        title: task.title, index,
-        completed: !!row.grades?.[index] || (row.files ?? []).some(file => file.task === index) || Object.hasOwn(row.answers ?? {}, index)
-      }))
-    }));
-    const topics = [...new Set([row.topic, ...tasks.map(task => task.topic)].filter(Boolean))];
+export async function studentSchedule(student: string): Promise<ScheduleCard[]> {
+  const assignments = await studentAssignments(student);
+  const linked = new Map<string, StudentAssignment[]>();
+  for (const assignment of assignments) {
+    if (assignment.lesson_id) {
+      const entries = linked.get(assignment.lesson_id);
+      if (entries) entries.push(assignment);
+      else linked.set(assignment.lesson_id, [assignment]);
+    }
+  }
+  return assignments.filter(assignment => assignment.entry_kind === "lesson").map(assignment => {
+    const { id, starts, settings, content } = assignment;
+    const works = [assignment, ...(linked.get(id) ?? [])].flatMap(item => {
+      const files = new Set(item.files.map(file => file.task));
+      return workSections(item, item).map(({ kind, state, tasks }) => ({
+        assignmentId: item.id,
+        title: item.content.work?.[kind]?.title ?? workLabels[kind],
+        kind,
+        state,
+        tasks: tasks.map(({ task, index }) => ({
+          title: task.title,
+          index,
+          completed: !!item.grades?.[index] || files.has(index) || Object.hasOwn(item.answers ?? {}, index)
+        }))
+      }));
+    });
     return {
-      id: row.id, kind: row.kind, level: row.level, starts: new Date(row.starts), meeting: row.meeting,
-      settings: row.settings ?? {}, groupName: row.group_name, title: row.title, topic: row.topic,
-      topics, attended: Boolean(row.attended), works
-    } satisfies ScheduleCard;
+      id, starts: new Date(starts), settings, works, cancelled: !!assignment.cancelled_at,
+      title: content.title,
+      teacherName: assignment.teacher_name,
+      topics: [...new Set([content.topic, ...content.tasks.map(task => task.topic)].filter(Boolean))]
+    };
   });
-  return { group: group?.name ?? cards[0]?.groupName ?? "", cards };
-}
-export function studentTrajectory(student: string) {
-  return first<Trajectory>("SELECT * FROM trajectories WHERE student=$1", [student]);
 }

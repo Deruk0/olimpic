@@ -10,14 +10,14 @@ import "../../library-modules.css";
 import { EmptyList, ListFilters } from "../../list-filters";
 
 export default async function LibraryPage({ searchParams }: { searchParams: Promise<{ kind?: string; id?: string; saved?: string; deleted?: string; q?: string; status?: string; sort?: string }> }) {
-  const user = await requireAccount("methodist");
+  const user = await requireAccount("teacher");
   const query = await searchParams;
   const kind = libraryKinds.find(value => value === query.kind) ?? "theory";
-  const entry = query.id && query.id !== "new" ? await first<LibraryEntry>("SELECT id,kind,title,ready,data FROM library_items WHERE kind=$1 AND id=$2", [kind, query.id]) : undefined;
+  const entry = query.id && query.id !== "new" ? await first<LibraryEntry>("SELECT id,kind,title,ready,data FROM library_items WHERE kind=$1 AND id=$2 AND teacher_id=$3", [kind, query.id, user.id]) : undefined;
   if (query.id && query.id !== "new" && !entry) notFound();
-  const tasks = kind === "work" && query.id ? await rows<Extract<LibraryEntry, { kind: "task" }>>("SELECT id,kind,title,ready,data FROM library_items WHERE kind='task' AND ready ORDER BY title,id") : [];
-  const entries = query.id ? [] : await rows<LibraryEntry>("SELECT id,kind,title,ready,data FROM library_items WHERE kind=$1 ORDER BY updated DESC,title", [kind]);
-  const theories = kind === "task" ? await rows<TheoryOption>("SELECT id,title,COALESCE(data->>'topic','') AS topic FROM library_items WHERE kind='theory' ORDER BY title,id") : [];
+  const tasks = kind === "work" && query.id ? await rows<Extract<LibraryEntry, { kind: "task" }>>("SELECT id,kind,title,ready,data FROM library_items WHERE kind='task' AND ready AND teacher_id=$1 ORDER BY title,id", [user.id]) : [];
+  const entries = query.id ? [] : await rows<LibraryEntry>("SELECT id,kind,title,ready,data FROM library_items WHERE kind=$1 AND teacher_id=$2 ORDER BY updated DESC,title", [kind, user.id]);
+  const theories = kind === "task" ? await rows<TheoryOption>("SELECT id,title,COALESCE(data->>'topic','') AS topic FROM library_items WHERE kind='theory' AND teacher_id=$1 ORDER BY title,id", [user.id]) : [];
   const normalize = (value: string | undefined) => (value ?? "").trim().toLocaleLowerCase("ru");
   const relatedTheories = (task: LibraryTask) => task.theoryId ? theories.filter(theory => theory.id === task.theoryId) :
     theories.filter(theory => normalize(task.topic) !== "" && normalize(theory.topic) === normalize(task.topic));
@@ -38,7 +38,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
       <LibraryEditor key={query.id + kind} kind={kind} entry={entry} tasks={tasks} theories={theories} />
       {entry && <DeleteLibraryItem key={entry.id} entry={entry} />}
     </section> : <>
-      <div className="list-heading"><p className="muted">{kind === "theory" ? "Теорию можно повторно использовать в занятиях разных групп." : kind === "task" ? "Готовые задачи доступны при сборке практики, домашней или самостоятельной работы." : "Соберите работу из задач банка и используйте её при назначении занятия."}</p>
+      <div className="list-heading"><p className="muted">{kind === "theory" ? "Теорию можно повторно использовать в занятиях разных учеников." : kind === "task" ? "Готовые задачи доступны при сборке практики, домашней или самостоятельной работы." : "Соберите работу из задач банка и используйте её при назначении занятия."}</p>
         <Link className="button" href={libraryPath(kind, "new")}>{kind === "theory" ? "+ Создать теорию" : kind === "task" ? "+ Создать задачу" : "+ Собрать работу"}</Link></div>
       <ListFilters action="/cabinet/library" hidden={{ kind }} search={search} placeholder={kind === "task" ? "Задача, тема или теория" : "Название или тема"} reset={libraryPath(kind)} count={visible.length} filters={[
         { name: "status", label: "Готовность", value: status, options: [["all", "Все материалы"], ["ready", "Готовые"], ["draft", "Черновики"]] },

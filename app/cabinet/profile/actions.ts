@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 import { requireAccount } from "../../../lib/auth";
 import { rows, transaction } from "../../../lib/db";
 import { materialImageType } from "../../../lib/material-image";
-import { preparationGoal } from "../../../lib/student";
 import { isThemeMode, isThemePalette } from "../../../lib/theme";
 
 const profilePath = "/cabinet/profile";
@@ -33,11 +32,6 @@ export async function saveProfile(form: FormData) {
     profileError("Введите имя и фамилию длиной до 120 символов.");
   }
 
-  const goal = user.role === "student" ? form.get("goal") : null;
-  if (goal !== null && (typeof goal !== "string" || (goal && goal !== user.goal && goal !== await preparationGoal()))) {
-    profileError("Выберите доступную цель подготовки.");
-  }
-
   const file = form.get("avatar");
   let avatar: Buffer | undefined;
   if (file instanceof File && file.size) {
@@ -50,10 +44,9 @@ export async function saveProfile(form: FormData) {
   }
 
   await transaction(async connection => {
-    await rows("UPDATE accounts SET name=$1,goal=CASE WHEN role='student' THEN COALESCE($2,goal) ELSE goal END WHERE id=$3",
-      [name.trim().replace(/\s+/g, " "), goal || null, user.id], connection);
+    await rows("UPDATE accounts SET name=$1 WHERE id=$2", [name.trim().replace(/\s+/g, " "), user.id], connection);
     if (avatar) {
-      await rows("INSERT INTO student_avatars(account,version,bytes) VALUES ($1,$2,$3) ON CONFLICT(account) DO UPDATE SET version=EXCLUDED.version,bytes=EXCLUDED.bytes",
+      await rows("INSERT INTO account_avatars(account,version,bytes) VALUES ($1,$2,$3) ON CONFLICT(account) DO UPDATE SET version=EXCLUDED.version,bytes=EXCLUDED.bytes",
         [user.id, randomUUID(), avatar], connection);
     }
   });
@@ -63,7 +56,15 @@ export async function saveProfile(form: FormData) {
 
 export async function removeProfileAvatar() {
   const user = await requireAccount();
-  await rows("DELETE FROM student_avatars WHERE account=$1", [user.id]);
+  await rows("DELETE FROM account_avatars WHERE account=$1", [user.id]);
   revalidatePath("/", "layout");
   redirect(profilePath + "?saved=1");
+}
+
+export async function detachLearningContact(contactId: string) {
+  const user = await requireAccount();
+  const pair = user.role === "teacher" ? [user.id, contactId] : [contactId, user.id];
+  await rows("DELETE FROM teacher_students WHERE teacher_id=$1 AND student_id=$2", pair);
+  revalidatePath(profilePath);
+  redirect(profilePath + "?saved=1#learning-contacts");
 }

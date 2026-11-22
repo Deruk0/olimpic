@@ -7,9 +7,9 @@ import "./lesson.css";
 import "./formula.css";
 export const metadata: Metadata = {
   metadataBase: siteUrl,
-  title: "Olimpik — олимпиадная математика",
+  title: "Olimpik — занятия с преподавателями",
   applicationName: "Olimpik",
-  description: "Учебная платформа олимпиадной подготовки",
+  description: "Каталог преподавателей и учебная платформа для индивидуальных занятий.",
 };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return <html lang="ru"><body>{children}</body></html>;

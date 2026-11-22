@@ -2,7 +2,6 @@ const logos = {
   horizontal: { width: 1000, height: 209 },
   wordmark: { width: 1000, height: 252 },
   mark: { width: 512, height: 510 },
-  stacked: { width: 600, height: 499 },
 };
 
 export function BrandLogo({ variant = "horizontal" }: { variant?: keyof typeof logos }) {

@@ -9,20 +9,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const user = await account();
   const { id } = await params;
   if (!user || !/^[a-f0-9-]{36}$/.test(id)) return new Response(null, { status: 404 });
-  if (user.role !== "methodist") {
+  if (user.role === "student") {
     const path = "/material-files/" + id;
-    const lessons = await rows<{ content: Lesson; kind: "lesson" | "diagnostic" }>(
-      "SELECT a.content,a.kind FROM assignments a JOIN groups g ON g.id=a.group_id WHERE strpos(a.content::text,$2)>0 AND (g.curator=$1 OR (a.deleted_at IS NULL AND a.starts IS NOT NULL AND EXISTS(SELECT 1 FROM members m WHERE m.group_id=g.id AND m.student=$1)))", [user.id,id]);
-    const linked = lessons.some(({ content, kind }) => {
-      const publicText = [content.theory, ...(content.materials ?? []).map(m => m.value), ...Object.values(content.work ?? {}).map(w => w.instructions),
+    const lessons = await rows<{ content: Lesson }>(
+      "SELECT a.content FROM assignments a JOIN material_files f ON f.id=$2 AND f.teacher_id=a.teacher_id WHERE a.student_id=$1 AND strpos(a.content::text,$2)>0", [user.id,id]);
+    const linked = lessons.some(({ content }) => {
+      const studentText = [content.theory, ...(content.materials ?? []).map(m => m.value), ...Object.values(content.work ?? {}).map(w => w.instructions),
         ...content.tasks.flatMap(t => [t.prompt, ...(t.options ?? []),
-          ...(user.role === "curator" || workKind(t, kind === "diagnostic") === "practice" ? [t.hint, t.solution] : []),
-          ...(user.role === "curator" ? [t.rubric, t.modelAnswer] : [])])];
-      return publicText.some(text => referencesMaterial(text, path));
+          ...(workKind(t) === "practice" ? [t.hint, t.solution] : [])])];
+      return studentText.some(text => referencesMaterial(text, path));
     });
     if (!linked) return new Response(null, { status: 404 });
   }
-  const file = await first<{ filename: string; bytes: Uint8Array }>("SELECT filename,bytes FROM material_files WHERE id=$1",[id]);
+  const file = await first<{ filename: string; bytes: Uint8Array }>(
+    "SELECT filename,bytes FROM material_files WHERE id=$1 AND ($2::text IS NULL OR teacher_id=$2)",
+    [id, user.role === "teacher" ? user.id : null]);
   if (!file) return new Response(null, { status: 404 });
   const image = materialImageType(file.bytes);
   return new Response(new Uint8Array(file.bytes), {headers:{

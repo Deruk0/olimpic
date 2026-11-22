@@ -20,7 +20,7 @@ export async function account() {
   const key = (await cookies()).get(cookieName)?.value;
   if (!key) return undefined;
   return first<SessionAccount>(
-    "SELECT a.*,v.version AS avatar_version,s.demo AS demo_session FROM sessions s JOIN accounts a ON a.id=s.account LEFT JOIN student_avatars v ON v.account=a.id WHERE s.hash=$1 AND s.expires>now() AND (NOT s.demo OR $2)",
+    "SELECT a.*,v.version AS avatar_version,s.demo AS demo_session FROM sessions s JOIN accounts a ON a.id=s.account LEFT JOIN account_avatars v ON v.account=a.id WHERE s.hash=$1 AND s.expires>now() AND (NOT s.demo OR $2)",
     [hash(key), demoLoginEnabled()]
   );
 }

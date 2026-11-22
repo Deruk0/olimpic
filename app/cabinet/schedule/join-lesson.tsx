@@ -2,20 +2,20 @@
 
 import Link from "next/link";
 import { useEffect, useId, useState } from "react";
-import { lessonPath } from "../../../lib/paths";
+import { lessonPath, roomPath } from "../../../lib/paths";
+import { roomEarlyAccess } from "../../../lib/lesson-time";
 import type { LessonSettings } from "../../../lib/model";
 
-const earlyAccess = 15 * 60_000;
 const openingTime = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow",
 });
 
-export function JoinLesson({ id, starts, ends, meeting, format, now }: {
-  id: string; starts: number; ends: number; meeting: string; format: LessonSettings["format"]; now: number;
+export function JoinLesson({ id, starts, ends, format, now }: {
+  id: string; starts: number; ends: number; format: LessonSettings["format"]; now: number;
 }) {
   const [current, setCurrent] = useState(now);
   const hint = useId();
-  const opens = starts - earlyAccess;
+  const opens = starts - roomEarlyAccess;
   useEffect(() => {
     const update = () => setCurrent(Date.now());
     update();
@@ -34,12 +34,12 @@ export function JoinLesson({ id, starts, ends, meeting, format, now }: {
     <small>{current >= ends ? "Занятие завершено" : "Место проведения указано в карточке"}</small>
   </div>;
 
-  const available = current >= opens && current < ends && !!meeting;
+  const available = current >= opens && current < ends;
   const message = current >= ends ? "Занятие завершено" :
     current < opens ? "Подключение откроется " + openingTime.format(opens) + " МСК · за 15 минут до начала" :
-    !meeting ? "Куратор ещё не добавил ссылку на урок" : "Ссылка на видеовстречу откроется в новой вкладке";
+    "Видеокомната Olimpik";
   return <div className="schedule-join">
-    {available ? <a className="button" href={meeting} target="_blank" rel="noopener noreferrer" aria-describedby={hint}>Подключиться к уроку <span aria-hidden="true">↗</span></a> :
+    {available ? <Link className="button" href={roomPath(id)} prefetch={false} aria-describedby={hint}>Подключиться к уроку</Link> :
       <button type="button" className="join-unavailable" disabled aria-describedby={hint}>Подключиться к уроку</button>}
     <small id={hint} aria-live="polite">{message}</small>
   </div>;

@@ -1,38 +1,45 @@
+import Link from "next/link";
 import { requireAccount, type SessionAccount } from "../../../lib/auth";
-import { first } from "../../../lib/db";
+import { teacherPath } from "../../../lib/booking";
+import { first, rows } from "../../../lib/db";
 import { roles } from "../../../lib/model";
-import { preparationGoal } from "../../../lib/student";
+import { linkedStudents } from "../../../lib/teacher";
+import { telegramBotName, telegramConfigured } from "../../../lib/telegram-data";
 import { signOut } from "../../actions";
 import { Submit } from "../../components";
 import { AccountAvatar, CabinetFrame } from "../frame";
-import { removeProfileAvatar, saveProfile } from "./actions";
-import { GoalSection } from "./goal-section";
+import { detachLearningContact, removeProfileAvatar, saveProfile } from "./actions";
 import { ThemeSettings } from "./theme-settings";
+import { TelegramSettings, type TelegramDelivery } from "./telegram-settings";
 import "./profile.css";
 
-export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ saved?: string; error?: string; goal?: string }> }) {
-  const [user, { saved, error, goal }] = await Promise.all([requireAccount(), searchParams]);
-  const student = user.role === "student";
+export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ saved?: string; error?: string }> }) {
+  const [user, { saved, error }] = await Promise.all([requireAccount(), searchParams]);
 
   return <CabinetFrame user={user} view="profile" title="Личный профиль" saved={saved} error={error}>
-    {student && <GoalSection student={user.id} mode={goal} />}
     <div className="profile-grid">
       <div className="profile-column">
         <PersonalDetails user={user} />
-        {student && <StudentEnrollment studentId={user.id} />}
+        <LearningContacts user={user} />
       </div>
       <div className="profile-column">
         <ThemeSettings />
+        {user.role === "student" && <StudentTelegram student={user.id} />}
         <AccountSettings user={user} />
       </div>
     </div>
   </CabinetFrame>;
 }
 
-async function PersonalDetails({ user }: { user: SessionAccount }) {
-  const availableGoal = user.role === "student" ? await preparationGoal() : "";
-  const goals = user.role === "student" ? [...new Set([user.goal, availableGoal].filter(Boolean))] : [];
+async function StudentTelegram({ student }: { student: string }) {
+  const link = await first<{ status: TelegramDelivery | null }>(`SELECT (
+    SELECT j.status FROM telegram_jobs j WHERE j.student_id=l.student_id AND j.link_id=l.id AND j.kind='test'
+    ORDER BY j.created_at DESC LIMIT 1) AS status FROM telegram_links l WHERE l.student_id=$1`, [student]);
+  return <TelegramSettings enabled={telegramConfigured()} linked={!!link}
+    botName={telegramBotName()} test={link?.status ?? null} />;
+}
 
+function PersonalDetails({ user }: { user: SessionAccount }) {
   return <section className="panel" id="personal">
     <h2>Личные данные</h2>
     <form action={saveProfile} className="editor">
@@ -43,10 +50,6 @@ async function PersonalDetails({ user }: { user: SessionAccount }) {
           <small>JPEG, PNG или WebP до 2 МБ</small>
         </label>
       </div>
-      {!!goals.length && <label>Олимпиада учебной программы<select name="goal" defaultValue={user.goal}>
-        {!user.goal && <option value="">Выберите олимпиаду</option>}
-        {goals.map(goal => <option key={goal} value={goal}>{goal}</option>)}
-      </select></label>}
       <Submit>Сохранить изменения</Submit>
     </form>
     {user.avatar_version && <form action={removeProfileAvatar} className="profile-remove-photo">
@@ -55,18 +58,23 @@ async function PersonalDetails({ user }: { user: SessionAccount }) {
   </section>;
 }
 
-async function StudentEnrollment({ studentId }: { studentId: string }) {
-  const enrollment = await first<{ group_name: string; curator_name: string }>(
-    "SELECT g.name AS group_name,c.name AS curator_name FROM members m JOIN groups g ON g.id=m.group_id JOIN accounts c ON c.id=g.curator WHERE m.student=$1",
-    [studentId]
-  );
+async function LearningContacts({ user }: { user: SessionAccount }) {
+  const teacher = user.role === "teacher";
+  const contacts: { id: string; name: string; subjects?: string[]; published?: boolean }[] = teacher ? await linkedStudents(user.id) :
+    await rows(`SELECT a.id,a.name,CASE WHEN cardinality(p.subjects)>0 THEN p.subjects ELSE ARRAY[p.subject] END AS subjects,
+      p.hourly_rate IS NOT NULL AND cardinality(p.subjects)>0 AND p.description<>'' AS published
+      FROM teacher_students ts JOIN teacher_profiles p ON p.teacher_id=ts.teacher_id JOIN accounts a ON a.id=p.teacher_id
+      WHERE ts.student_id=$1 ORDER BY a.name,a.id`,
+      [user.id]);
 
-  return <section className="panel">
-    <h2>Обучение</h2>
-    <dl className="profile-facts">
-      <div><dt>Группа</dt><dd>{enrollment?.group_name ?? "Пока не назначена"}</dd></div>
-      {enrollment && <div><dt>Куратор</dt><dd>{enrollment.curator_name}</dd></div>}
-    </dl>
+  return <section className="panel" id="learning-contacts">
+    <h2>{teacher ? "Мои ученики" : "Мои преподаватели"}</h2>
+    {contacts.length === 0 ? <p className="muted">{teacher ? "У вас пока нет учеников." : "У вас пока нет преподавателей."}</p> :
+      contacts.map(contact => <form key={contact.id} action={detachLearningContact.bind(null, contact.id)} className="split">
+        <span>{contact.published ? <Link href={teacherPath(contact.id)}>{contact.name}</Link> : contact.name}
+          {contact.subjects && " · " + contact.subjects.join(", ")}</span>
+        <button type="submit" className="secondary" aria-label={"Отвязать: " + contact.name}>Отвязать</button>
+      </form>)}
   </section>;
 }
 

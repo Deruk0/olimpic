@@ -1,7 +1,13 @@
 import type { Task } from "../lib/model";
+import { shortAnswerLimit } from "../lib/answers";
 import { FormattedText } from "./formatted-text";
 
 export function TaskAnswerInputs({ task, index }: { task: Task; index: number }) {
+  if (task.response === "short") {
+    return <label>{task.answerKey?.format === "number" ? "Ваш ответ числом" : "Ваш короткий ответ"}
+      <input name={"answer." + index} inputMode={task.answerKey?.format === "number" ? "decimal" : "text"} maxLength={shortAnswerLimit} required />
+    </label>;
+  }
   if (task.response === "text") {
     return <label>Ваш ответ<textarea name={"answer." + index} rows={6} maxLength={12000} required /></label>;
   }

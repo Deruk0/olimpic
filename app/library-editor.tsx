@@ -2,17 +2,17 @@
 
 import { useActionState, useRef, useState } from "react";
 import { Hidden } from "./components";
-import { deleteLibrary, saveLibrary, savePlannedLesson } from "./library-actions";
-import { Theory } from "./program-editor";
+import { deleteLibrary, saveLibrary } from "./library-actions";
+import { Theory } from "./theory-editor";
 import { TextEditor } from "./text-editor";
 import { TaskAnswerInputs, TaskOptionList } from "./task-answer";
 import { FormattedText } from "./formatted-text";
 import { libraryWorkKinds, type LibraryEntry, type LibraryKind, type LibraryTask, type LibraryWorkKind, type OptionalTaskSection, type TheoryOption } from "../lib/library";
-import { levels, type Assignment, type Group, type Lesson, type Task } from "../lib/model";
-import { workKind, workLabels } from "../lib/work";
+import { type Lesson, type Task } from "../lib/model";
+import { workLabels } from "../lib/work";
 
 type BankTask = Extract<LibraryEntry, { kind: "task" }>;
-const answerLabels = { file: "Файл", text: "Письменный ответ", single: "Один вариант", multiple: "Несколько вариантов" };
+const answerLabels = { file: "Файл", text: "Письменный ответ", short: "Короткий ответ", single: "Один вариант", multiple: "Несколько вариантов" };
 function reorder(items: string[], index: number, step: number) {
   const next = [...items];
   [next[index], next[index + step]] = [next[index + step], next[index]];
@@ -111,10 +111,21 @@ export function LibraryEditor({ kind, entry, tasks, theories }: { kind: LibraryK
       </fieldset>
       <fieldset hidden={module !== "answer"} className="task-builder-section"><legend>Ответ и оценка</legend>
       <div className="formgrid"><label>Формат ответа<select name="response" value={task.response ?? "file"} onChange={event => setTask({ ...task, response: event.target.value as Task["response"], correct: [] })}>
-        <option value="text">Письменный ответ</option><option value="single">Один вариант</option><option value="multiple">Несколько вариантов</option><option value="file">Файл с решением</option>
+        <option value="text">Письменный ответ</option><option value="short">Короткий ответ с автопроверкой</option><option value="single">Один вариант</option><option value="multiple">Несколько вариантов</option><option value="file">Файл с решением</option>
       </select></label>
       <label>Максимум баллов<input name="max" type="number" min={1} max={100} required value={task.max} onChange={event => setTask({ ...task, max: Number(event.target.value) })} /></label></div>
-      {(task.response === "single" || task.response === "multiple") && <fieldset><legend>Варианты и ключ для куратора</legend>
+      {task.response === "short" && <>
+        <label>Тип короткого ответа<select name="answerFormat" value={task.answerKey?.format ?? "text"} onChange={event => {
+          const format = event.target.value === "number" ? "number" : "text";
+          setTask(current => ({ ...current, answerKey: { format, values: current.answerKey?.values ?? [] } }));
+        }}><option value="text">Текст</option><option value="number">Число</option></select></label>
+        <label>Правильные ответы<textarea name="acceptedAnswers" rows={4} maxLength={4200} value={task.answerKey?.values.join("\n") ?? ""}
+          onChange={event => {
+            const values = event.target.value.split("\n");
+            setTask(current => ({ ...current, answerKey: { format: current.answerKey?.format ?? "text", values } }));
+          }} /><small>Один допустимый ответ на строку. Для числа подходят запятая и точка.</small></label>
+      </>}
+      {(task.response === "single" || task.response === "multiple") && <fieldset><legend>Варианты и ключ для преподавателя</legend>
         {options.map((option, i) => <div className="task-builder-option" key={optionKeys[i]}>
           <div className="split">
             <label className="task-builder-key"><input type={task.response === "single" ? "radio" : "checkbox"} name="correct" value={i} checked={correct.includes(i)} onChange={event => setTask({ ...task, correct: task.response === "single" ? [i] : event.target.checked ? [...correct, i] : correct.filter(j => j !== i) })} /> Правильный вариант {i + 1}</label>
@@ -136,8 +147,8 @@ export function LibraryEditor({ kind, entry, tasks, theories }: { kind: LibraryK
       <div hidden={!(["hint", "solution", "modelAnswer", "rubric"].includes(module))}>
       {module === "hint" && optionalSection("hint", "Подсказка для практики", 3000)}
       {module === "solution" && optionalSection("solution", "Разбор для самопроверки в практике", 6000)}
-      {module === "modelAnswer" && optionalSection("modelAnswer", "Образец решения · только для куратора", 8000)}
-      {module === "rubric" && optionalSection("rubric", "Критерии проверки · только для куратора", 5000)}
+      {module === "modelAnswer" && optionalSection("modelAnswer", "Образец решения · только для преподавателя", 8000)}
+      {module === "rubric" && optionalSection("rubric", "Критерии проверки · только для преподавателя", 5000)}
       </div>
       {(["hint", "solution", "modelAnswer", "rubric"] as OptionalTaskSection[]).filter(name => name !== module).map(name => <span key={name}>
         <Hidden name={name} value={task[name] ?? ""} />
@@ -233,71 +244,4 @@ export function DeleteLibraryItem({ entry }: { entry: LibraryEntry }) {
       <button className="plain" disabled={pending}>{pending ? "Удаление…" : "Подтвердить удаление"}</button>
     </form>
   </details>;
-}
-
-export function PlanningEditor({ assignment, groups, items, preferredGroup }: { assignment?: Assignment; groups: Group[]; items: LibraryEntry[]; preferredGroup?: string }) {
-  const [result, action, pending] = useActionState(savePlannedLesson, { error: "" });
-  const [form, setForm] = useState({
-    title: assignment?.content.title ?? "", level: assignment?.level ?? "basic",
-    group: assignment?.group_id ?? preferredGroup ?? "",
-    theory: assignment ? "keep" : "", practice: assignment ? "keep" : "", homework: assignment ? "keep" : "", assessment: assignment ? "keep" : ""
-  });
-  const update = (name: keyof typeof form, value: string) => setForm(current => ({ ...current, [name]: value }));
-  const theory = items.filter(item => item.kind === "theory");
-  const [extraTheory, setExtraTheory] = useState<string[]>([]);
-  const orderedTheory = [form.theory, ...extraTheory];
-  function moveTheory(index: number, step: number) {
-    const [first, ...rest] = reorder(orderedTheory, index, step);
-    update("theory", first);
-    setExtraTheory(rest);
-  }
-  return <form action={action} className="editor">
-    <Hidden name="id" value={assignment?.id ?? ""} />
-    <div className="formgrid">
-      {assignment ? <label>Группа<input value={groups.find(group => group.id === form.group)?.name ?? ""} readOnly /></label> :
-        <label>Группа<select name="group" required value={form.group} onChange={event => update("group", event.target.value)}><option value="" disabled>Выберите группу</option>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>}
-      <label>Название занятия<input name="title" placeholder="По умолчанию — название теории" maxLength={120} value={form.title} onChange={event => update("title", event.target.value)} /></label>
-      <label>Уровень<select name="level" value={form.level} onChange={event => update("level", event.target.value)}><option value="basic">{levels.basic}</option><option value="advanced">{levels.advanced}</option></select></label>
-    </div>
-    <fieldset><legend>Материалы занятия</legend>
-      <label>Теория<select name="theory" required value={form.theory} onChange={event => {
-        const id = event.target.value;
-        update("theory", id);
-        setExtraTheory(current => id === "keep" ? [] : current.filter(value => value !== id));
-      }}>
-        <option value="" disabled>Выберите готовую теорию</option>
-        {assignment && <option value="keep">Оставить текущую · {assignment.content.topic}</option>}
-        {theory.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
-      </select></label>
-      {form.theory && form.theory !== "keep" && <>
-        {orderedTheory.map((id, i) => {
-          const item = theory.find(value => value.id === id);
-          return <div className="task-edit" key={id}>
-            {i > 0 && <Hidden name="theory" value={id} />}
-            <div className="split"><b>{i + 1}. {item?.title}</b><div className="controls">
-              <button type="button" className="secondary" aria-label={"Поднять блок " + (i + 1)} disabled={i === 0} onClick={() => moveTheory(i, -1)}>↑</button>
-              <button type="button" className="secondary" aria-label={"Опустить блок " + (i + 1)} disabled={i === orderedTheory.length - 1} onClick={() => moveTheory(i, 1)}>↓</button>
-              {i > 0 && <button type="button" className="plain" onClick={() => setExtraTheory(extraTheory.filter(value => value !== id))}>Убрать блок</button>}
-            </div></div>
-            {item && <details><summary>Посмотреть содержимое</summary>
-              <FormattedText text={item.data.theory} />
-              {item.data.materials?.map((block, j) => <div key={j}><b>{block.title}</b><FormattedText text={block.value} /></div>)}
-            </details>}
-          </div>;
-        })}
-        <label>Добавить блок теории<select value="" disabled={extraTheory.length >= 11} onChange={event => setExtraTheory([...extraTheory, event.target.value])}>
-          <option value="" disabled>Выберите ещё один блок</option>
-          {theory.filter(item => item.id !== form.theory && !extraTheory.includes(item.id)).map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
-        </select></label>
-      </>}
-      {libraryWorkKinds.map(kind => <label key={kind}>{workLabels[kind]}<select name={kind} value={form[kind]} onChange={event => update(kind, event.target.value)}>
-        {assignment && <option value="keep">{assignment.content.tasks.some(task => workKind(task, false) === kind) ? "Оставить текущую работу" : "Без изменений · работы нет"}</option>}
-        <option value="">Без работы</option>
-        {items.filter(item => item.kind === "work" && item.data.kind === kind).map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
-      </select></label>)}
-      <p className="muted">Если выбрать материал заново, в занятие попадёт его текущая готовая версия.</p>
-    </fieldset>
-    {result.error && <p className="notice error" role="alert">{result.error}</p>}
-    <button disabled={pending}>{pending ? "Сохранение…" : assignment ? "Обновить занятие" : "Назначить занятие"}</button>
-  </form>;
 }

@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { formats, levels } from "../../../lib/model";
+import { formats } from "../../../lib/model";
+import { lessonEnd } from "../../../lib/lesson-time";
 import { lessonPath, workPath } from "../../../lib/paths";
 import type { ScheduleCard } from "../../../lib/student";
-import { workLabels, workStates } from "../../../lib/work";
+import { WorkBadge } from "../work-badge";
 import { InterfaceIcon } from "../../interface-icons";
 import { JoinLesson } from "./join-lesson";
 
@@ -31,12 +32,13 @@ function when(start: Date, now: Date) {
 export function ScheduleBoard({ cards, now, focus, archive }: { cards: ScheduleCard[]; now: number; focus?: string; archive: boolean }) {
   const upcoming: ScheduleCard[] = [];
   const past: ScheduleCard[] = [];
+  const cancelled: ScheduleCard[] = [];
   const numbers = new Map<string, number>();
-  let lesson = 0;
-  for (const card of cards) {
-    if (card.kind === "lesson") numbers.set(card.id, ++lesson);
-    const end = card.starts.getTime() + (card.settings.duration ?? 90) * 60_000;
-    if (end > now) upcoming.push(card);
+  for (const [index, card] of cards.entries()) {
+    numbers.set(card.id, index + 1);
+    const end = lessonEnd(card.starts.getTime(), card.settings.duration);
+    if (end > now && card.cancelled) cancelled.push(card);
+    else if (end > now) upcoming.push(card);
     else past.push(card);
   }
   past.reverse();
@@ -51,6 +53,10 @@ export function ScheduleBoard({ cards, now, focus, archive }: { cards: ScheduleC
       <h2 className="schedule-heading">Дальше</h2>
       <div className="schedule-list">{later.map(card => <ScheduleCardView key={card.id} card={card} index={numbers.get(card.id) ?? 0} now={now} focus={focus} />)}</div>
     </section>}
+    {!!cancelled.length && <section>
+      <h2 className="schedule-heading">Отменённые занятия</h2>
+      <div className="schedule-list">{cancelled.map(card => <ScheduleCardView key={card.id} card={card} index={numbers.get(card.id) ?? 0} now={now} focus={focus} />)}</div>
+    </section>}
     {!!past.length && <section className="schedule-past" id="history" aria-labelledby="schedule-history-title">
       <div className="split"><h2 id="schedule-history-title">Прошедшие занятия <span className="badge">{past.length}</span></h2>
         {next && <Link className="button secondary" prefetch={false} href={showPast ? "/cabinet/schedule#history" : "/cabinet/schedule?archive=1#history"}>{showPast ? "Свернуть" : "Показать архив"}</Link>}
@@ -63,10 +69,10 @@ export function ScheduleBoard({ cards, now, focus, archive }: { cards: ScheduleC
 function ScheduleCardView({ card, index, now, focus, featured = false }: {
   card: ScheduleCard; index: number; now: number; focus?: string; featured?: boolean;
 }) {
-  const end = new Date(card.starts.getTime() + (card.settings.duration ?? 90) * 60_000);
-  const live = card.starts.getTime() <= now && end.getTime() > now;
+  const end = new Date(lessonEnd(card.starts.getTime(), card.settings.duration));
+  const live = !card.cancelled && card.starts.getTime() <= now && end.getTime() > now;
   const format = formats[card.settings.format ?? "online"];
-  const label = card.kind === "diagnostic" ? "Диагностика" : "Занятие " + index + " · " + levels[card.level];
+  const label = "Занятие " + index;
   return <article id={"lesson-" + card.id} className={"schedule-card" + (featured ? " is-featured" : "") + (focus === card.id ? " is-focus" : "")}>
     <time className="schedule-day" dateTime={card.starts.toISOString()}>
       <b>{dayNumber.format(card.starts)}</b>
@@ -78,37 +84,33 @@ function ScheduleCardView({ card, index, now, focus, featured = false }: {
       <p className="schedule-meta">
         <span>{clock.format(card.starts)}–{clock.format(end)} МСК</span>
         <span>{format}</span>
+        {card.cancelled && <span className="badge badge-danger">Урок отменён</span>}
+        <span>{card.teacherName}</span>
         {card.settings.location && <span>{card.settings.location}</span>}
-        {card.attended && <span className="schedule-attended">Посещено</span>}
       </p>
       {!!card.topics.length && <p className="schedule-topics">{card.topics.join(" · ")}</p>}
-      <JoinLesson id={card.id} starts={card.starts.getTime()} ends={end.getTime()} meeting={card.meeting} format={card.settings.format ?? "online"} now={now} />
+      {!card.cancelled && <JoinLesson id={card.id} starts={card.starts.getTime()} ends={end.getTime()} format={card.settings.format ?? "online"} now={now} />}
     </div>
     <details className="schedule-materials">
       <summary>
-        <span className="schedule-materials-heading"><InterfaceIcon name="library" /><span>Материалы занятия<small>Теория{card.works.length ? " и учебные работы" : ""}{card.settings.recording ? " · запись урока" : ""}</small></span></span>
+        <span className="schedule-materials-heading"><InterfaceIcon name="library" /><span>Материалы занятия<small>Теория{card.works.length ? " и учебные работы" : ""}</small></span></span>
         <span className="schedule-materials-chevron"><InterfaceIcon name="chevronDown" /></span>
       </summary>
       <div className="schedule-material-grid">
         <section className="schedule-material-section">
-          <div className="section-title"><InterfaceIcon name="programs" /><h3>Теория</h3></div>
+          <div className="section-title"><InterfaceIcon name="theory" /><h3>Теория</h3></div>
           <p className="muted">Конспект и материалы к занятию</p>
           <Link className="button secondary" prefetch={false} href={lessonPath(card.id)}>Открыть теорию</Link>
         </section>
-        {card.works.map(work => <section className={"schedule-material-section is-" + work.state} key={work.kind}>
-          <div className="schedule-material-title"><div className="section-title"><InterfaceIcon name="homework" /><h3><Link prefetch={false} href={workPath(card.id, work.kind)}>{workLabels[work.kind]}</Link></h3></div>
+        {card.works.map(work => <section className={"schedule-material-section is-" + work.state} key={work.assignmentId + work.kind}>
+          <div className="schedule-material-title"><div className="section-title"><InterfaceIcon name="homework" /><h3><Link prefetch={false} href={workPath(work.assignmentId, work.kind)}>{work.title}</Link></h3></div>
             <CompletionCircle completed={work.tasks.filter(task => task.completed).length} total={work.tasks.length} />
           </div>
-          <div className="split"><span className={"badge" + (work.state === "reviewed" ? " badge-success" : " badge-neutral")}>{workStates[work.state]}</span><small>Заданий · {work.tasks.length}</small></div>
+          <div className="split"><WorkBadge state={work.state} /><small>Заданий · {work.tasks.length}</small></div>
           <ol className="schedule-material-tasks">{work.tasks.map(({ title, index, completed }, position) => <li key={index}>
-            <Link className="schedule-material-task" prefetch={false} href={workPath(card.id, work.kind) + "?task=" + index}><span>{title || "Задача " + (position + 1)}</span><CompletionCircle completed={Number(completed)} total={1} /></Link>
+            <Link className="schedule-material-task" prefetch={false} href={workPath(work.assignmentId, work.kind) + "?task=" + index}><span>{title || "Задача " + (position + 1)}</span><CompletionCircle completed={Number(completed)} total={1} /></Link>
           </li>)}</ol>
         </section>)}
-        {card.settings.recording && <section className="schedule-material-section">
-          <div className="section-title"><InterfaceIcon name="course" /><h3>Запись урока</h3></div>
-          <p className="muted">Посмотрите занятие ещё раз</p>
-          <a className="button secondary" href={card.settings.recording} target="_blank" rel="noopener noreferrer">Смотреть запись ↗</a>
-        </section>}
       </div>
     </details>
   </article>;
