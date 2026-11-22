@@ -26,7 +26,7 @@
     "@tiptap/react": "^3.32.2",
     "@tiptap/starter-kit": "^3.32.2",
     "katex": "^0.19.1",
-    "next": "^16.4.4",
+    "next": "16.4.6",
     "pg": "^8.23.1",
     "react": "^19.3.1",
     "react-day-picker": "^9.14.0",

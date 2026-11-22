@@ -48,4 +48,6 @@ npm run manage -- demo
 
 Для ручного запуска выполните `npm ci`, `npm run seed` и `npm run dev`. По умолчанию используется PGlite в `data/olimpik-lms`. Переменная `DATABASE_URL` включает PostgreSQL. `npm run typecheck` проверяет типы, `npm run build` собирает приложение, `npm start` запускает сборку.
 
+Политика `experimental.agentUpgrade: "security"` в `next.config.ts` включает напоминания Next.js об исправлениях безопасности. Чтобы подготовить обновление, выполните `npx next upgrade --agent=security`.
+
 [Устройство базы и команды](docs/data.md)
