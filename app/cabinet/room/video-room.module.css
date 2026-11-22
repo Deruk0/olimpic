@@ -1,34 +1,49 @@
-.room { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, .48fr); gap: 1rem; align-items: start; }
-.call, .chat { min-width: 0; background: var(--panel); border: 1px solid var(--line); padding: 1rem; border-radius: 16px; }
-.topLine { display: flex; align-items: start; justify-content: space-between; gap: .65rem; flex-wrap: wrap; margin-bottom: .85rem; }
-.attention { border-radius: 10px; padding: .45rem .7rem; background: var(--soft); color: var(--accent); display: grid; gap: .1rem; }
-.attention[data-focus="true"] { background: var(--success-bg); color: var(--success); }
-.attention[data-focus="false"] { background: var(--danger-bg); color: var(--danger); }
+.room { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, .37fr); gap: .85rem; align-items: start; }
+.call, .communication { display: grid; gap: .65rem; min-width: 0; }
+.chat, .presentation, .dock { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-panel); }
+.chat, .dock { padding: .7rem; }
+.dock { justify-content: center; }
+.presentation { overflow: hidden; }
+.presentation h2 { display: flex; align-items: center; gap: .55rem; padding: .65rem .8rem; margin: 0; font-size: .93rem; }
+.stage { height: clamp(16rem, 55svh, 36rem); display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); background: var(--media-bg); }
+.topLine { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; min-height: 2.1rem; gap: .55rem; flex-wrap: wrap; }
+.attention { color: var(--sub); display: flex; gap: .3rem .7rem; flex-wrap: wrap; align-items: center; }
+.attention::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; }
+.attention[data-focus="true"] { color: var(--success); }
+.attention[data-focus="false"] { color: var(--warning); }
 .attention span { font-size: .83rem; }
-.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; margin-bottom: .9rem; }
-.picture, .screen { position: relative; display: grid; place-items: center; margin: 0; min-height: 96px; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 12px; color: #faf7ff; background: #262236; }
-.screen { aspect-ratio: 16 / 9; margin: 0 0 .6rem; background: #181522; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); height: clamp(5.5rem, 9vw, 8rem); gap: .5rem; }
+.tiles > :last-child { grid-column: 2; }
+.picture, .screen { position: relative; display: grid; place-items: center; min-width: 0; min-height: 0; margin: 0; overflow: hidden; color: var(--media-ink); background: var(--media-bg); }
+.tiles .picture { border-radius: var(--radius-control); }
+.stage > :nth-child(2) { border-inline-start: 1px solid var(--line); }
 .picture video, .screen video { width: 100%; height: 100%; object-fit: contain; position: absolute; inset: 0; }
-.picture figcaption, .screen figcaption { position: absolute; bottom: .45rem; left: .5rem; padding: .12rem .5rem; border-radius: .4rem; background: #171221d9; font-size: .83rem; }
-.placeholder { text-align: center; padding: .5rem; overflow-wrap: anywhere; color: #d8d1e8; }
-.leave { color: var(--danger); font-weight: 700; min-height: 39px; display: inline-flex; align-items: center; padding: 0 .35rem; }
+.picture figcaption, .screen figcaption { position: absolute; bottom: .45rem; left: .5rem; padding: .12rem .5rem; border-radius: var(--space-1); background: var(--media-bg); font-size: .83rem; }
+.placeholder { text-align: center; padding: .5rem; overflow-wrap: anywhere; color: var(--media-muted); }
+.leave { color: var(--danger); border-color: var(--danger-line); background: var(--danger-bg); }
+.leave:hover { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
 .chat h2 { margin-bottom: .75rem; }
 .jump { display: none; font-weight: 700; }
-.messages { display: grid; align-content: start; gap: .55rem; height: clamp(12rem, 36vh, 26rem); overflow: auto; padding: .2rem .25rem .4rem 0; }
-.messages:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.message { border-radius: 10px; padding: .45rem .65rem; background: var(--surface); overflow-wrap: anywhere; }
+.messages { height: clamp(11rem, 35vh, 26rem); padding: .2rem .15rem .4rem 0; }
+.messageList { display: grid; align-content: start; gap: .55rem; min-width: 0; }
+.message { border-radius: var(--radius-control); padding: .45rem .65rem; background: var(--surface); overflow-wrap: anywhere; }
 .message[data-own="true"] { background: var(--soft); }
 .message time { color: var(--sub); font-size: .78rem; }
 .message p { margin: .2rem 0; }
 .message img { display: block; max-width: 100%; max-height: 180px; margin-top: .3rem; border-radius: 6px; }
 .chatForm { display: grid; gap: .6rem; padding-top: .65rem; border-top: 1px solid var(--line); }
 .chatForm label { font-weight: 650; }
-.chatForm textarea { display: block; width: 100%; margin-top: .25rem; padding: .5rem; border: 1px solid var(--control-line); border-radius: 8px; color: var(--ink); background: var(--panel); font: inherit; font-weight: 400; resize: vertical; }
-.upload { position: relative; width: fit-content; color: var(--accent); cursor: pointer; }
+.chatForm textarea { display: block; width: 100%; margin-top: .25rem; padding: .5rem; border: 1px solid var(--control-line); border-radius: var(--radius-control); color: var(--ink); background: var(--panel); font: inherit; font-weight: 400; resize: vertical; }
+.upload { position: relative; width: fit-content; color: var(--link); cursor: pointer; }
 .upload:focus-within { outline: 2px solid var(--focus); outline-offset: 3px; }
 .upload input { position: absolute; inset: 0; width: 100%; cursor: pointer; opacity: 0; }
 .selected { overflow-wrap: anywhere; margin: 0; }
 @media (max-width: 920px) {
   .room { grid-template-columns: minmax(0, 1fr); }
+  .stage { height: clamp(10rem, 48vw, 29rem); }
   .jump { display: inline-flex; }
+}
+@media (max-width: 580px) {
+  .topLine:has(.attention) { align-content: start; justify-content: start; min-height: 4.1rem; }
+  .attention { flex-basis: 100%; }
 }

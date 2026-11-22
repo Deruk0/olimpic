@@ -19,24 +19,29 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
   const visible = works.filter(work => active === "all" || work.state === active)
     .sort((a, b) => order[a.state] - order[b.state] || new Date(b.assignment.starts).getTime() - new Date(a.assignment.starts).getTime());
 
-  return <CabinetFrame user={teacher} view="review" title="Проверка работ">
-    <div className="controls"><Link className="button" href="/cabinet/review/issue">Выдать ДЗ</Link></div>
-    <nav className="chips" aria-label="Статусы работ">
+  return <CabinetFrame user={teacher} view="review" title="Проверка работ"
+    action={<Link className="button" href="/cabinet/review/issue">Выдать ДЗ</Link>}>
+    <nav className="cabinet-tabs" aria-label="Статусы работ">
       <Link href="/cabinet/review" className={active === "all" ? "active" : ""} aria-current={active === "all" ? "page" : undefined}>Все</Link>
       {Object.entries(workStates).map(([key, label]) =>
         <Link key={key} href={"/cabinet/review?status=" + key} className={active === key ? "active" : ""} aria-current={active === key ? "page" : undefined}>{label}</Link>)}
     </nav>
     {!visible.length && <p className="panel muted">{works.length ? "Работ с таким статусом нет." : "Выданных работ пока нет."}</p>}
-    {visible.map(({ assignment, kind, tasks, deadline, state }) => {
-      const score = workScore(tasks, assignment);
-      return <article className="panel list-card split" key={assignment.id + kind}>
-        <div>
-          <h2><Link href={reviewPath(assignment.id, kind)}>{workTitle(assignment, kind)}</Link></h2>
-          <p className="muted">{assignment.student_name}{deadline && " · До " + formatLessonTime(deadline)}
-            {!!score.graded.length && " · " + score.score + " / " + score.total + " б."}</p>
-        </div>
-        <WorkBadge state={state} />
-      </article>;
-    })}
+    {visible.length > 0 && <div className="list-stack">
+      {visible.map(({ assignment, kind, tasks, deadline, state }) => {
+        const score = workScore(tasks, assignment);
+        return <article className="list-card split" key={assignment.id + kind}>
+          <div>
+            <h2><Link href={reviewPath(assignment.id, kind)}>{workTitle(assignment, kind)}</Link></h2>
+            <p className="muted">{assignment.student_name}{deadline && " · До " + formatLessonTime(deadline)}
+              {!!score.graded.length && " · " + score.score + " / " + score.total + " б."}</p>
+          </div>
+          <div className="controls">
+            <WorkBadge state={state} />
+            {state === "awaiting" && <Link className="button secondary" href={reviewPath(assignment.id, kind)}>Проверить</Link>}
+          </div>
+        </article>;
+      })}
+    </div>}
   </CabinetFrame>;
 }

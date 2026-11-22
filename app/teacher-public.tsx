@@ -1,22 +1,26 @@
 import Link from "next/link";
-import { BrandLogo } from "./brand-logo";
 import styles from "./teachers.module.css";
 
 const rubles = new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 0 });
+const headerLinks = {
+  catalog: { href: "/", label: "Преподаватели" },
+  cabinet: { href: "/cabinet", label: "Кабинет" },
+  login: { href: "/login", label: "Войти" },
+};
 
-export function PublicHeader({ signedIn }: { signedIn: boolean }) {
-  return <header className={styles.header}>
-    <div className={styles.container}>
-      <Link className={styles.brand} href="/" aria-label="Olimpik — каталог"><BrandLogo /></Link>
-      <Link className={styles.headerLink} href={signedIn ? "/cabinet" : "/login"}>{signedIn ? "Кабинет" : "Войти"}</Link>
+export function PublicHeader({ destination }: { destination: keyof typeof headerLinks }) {
+  const { href, label } = headerLinks[destination];
+  return <header className="top">
+    <div className="top-inner">
+      <Link className="brand-word" href="/" aria-label="Olimpik — каталог преподавателей">Olimpik</Link>
+      <Link className="button secondary" href={href}>{label}</Link>
     </div>
   </header>;
 }
 
-export function TeacherIdentity({ name, subject }: { name: string; subject: string }) {
+export function TeacherIdentity({ name }: { name: string }) {
   const words = name.trim().split(/\s+/).slice(0, 2);
-  const tone = subject.toLocaleLowerCase("ru");
-  return <span className={styles.initials} data-tone={tone.includes("русск") ? "peach" : tone.includes("информат") ? "mint" : "lilac"} aria-hidden="true">
+  return <span className={"account-avatar " + styles.initials} aria-hidden="true">
     {words.map(word => Array.from(word)[0]).join("").toLocaleUpperCase("ru")}
   </span>;
 }

@@ -13,7 +13,7 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
   if (!lesson) notFound();
   const now = Date.now();
   const open = now >= lesson.opens && now < lesson.closes;
-  return <CabinetFrame user={user} view="schedule" title={lesson.title}>
+  return <CabinetFrame user={user} view="schedule" title={lesson.title} back={{ href: "/cabinet/schedule", label: "Расписание" }}>
     {open ? <VideoRoom id={id} teacher={user.role === "teacher"} peerName={lesson.peer_name} iceServers={roomIceServers()} /> :
       <section className="panel">
         <p>{now >= lesson.closes ? "Урок завершён." : "Комната откроется " + formatLessonTime(new Date(lesson.opens)) + "."}</p>

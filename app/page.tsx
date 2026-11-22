@@ -19,38 +19,40 @@ export default async function Catalog({ searchParams }: { searchParams: Promise<
   const active = typeof query.subject === "string" ? key(query.subject) : "";
   const visible = active ? teachers.filter(teacher => teacher.subjects.some(subject => key(subject) === active)) : teachers;
 
-  return <div className={styles.publicPage}>
-    <PublicHeader signedIn={!!user} />
-    <main className={styles.container}>
+  return <>
+    <PublicHeader destination={user ? "cabinet" : "login"} />
+    <main className="site-container">
       <section className={styles.catalogHero}>
-        <h1>Найдите своего<br className={styles.heroBreak} /> преподавателя</h1>
-        <p>Подготовка к ОГЭ и ЕГЭ, школьные темы и индивидуальные занятия.</p>
+        <h1>Преподаватели</h1>
+        <p>Индивидуальные занятия по школьным предметам и подготовка к ОГЭ и ЕГЭ.</p>
       </section>
       <section className={styles.catalog} aria-label="Каталог преподавателей">
         <div className={styles.catalogHeading}>
-          <h2>Преподаватели <span>{visible.length}</span></h2>
-          <nav className={styles.filters} aria-label="Фильтр по предмету">
+          <nav className={"chips " + styles.filters} aria-label="Фильтр по предмету">
             <Link href="/" aria-current={!active ? "page" : undefined}>Все предметы</Link>
             {subjects.map(subject => <Link key={subject} href={{ pathname: "/", query: { subject } }}
               aria-current={active === key(subject) ? "page" : undefined}>{subject}</Link>)}
           </nav>
+          <p className="muted tabular">Найдено {visible.length}</p>
         </div>
-        {visible.length ? <div className={styles.grid}>
+        {visible.length ? <div className="list-stack">
           {visible.map(teacher => <article className={styles.card} key={teacher.id}>
-            <TeacherIdentity name={teacher.name} subject={teacher.subjects[0]} />
-            <h3><Link href={teacherPath(teacher.id)}>{teacher.name}</Link></h3>
-            <TeacherSubjects subjects={teacher.subjects} />
-            <p className={styles.summary}>{teacher.description}</p>
+            <TeacherIdentity name={teacher.name} />
+            <div className={styles.cardCopy}>
+              <h2><Link href={teacherPath(teacher.id)}>{teacher.name}</Link></h2>
+              <TeacherSubjects subjects={teacher.subjects} />
+              <p className={styles.summary}>{teacher.description}</p>
+            </div>
             <div className={styles.cardFooter}>
               <HourlyRate rate={teacher.hourly_rate} />
-              <Link className={styles.outline} href={teacherPath(teacher.id)}>Визитка <span aria-hidden="true">↗</span></Link>
+              <Link className="button secondary" href={teacherPath(teacher.id)} aria-label={"Визитка, " + teacher.name}>Визитка <span aria-hidden="true">→</span></Link>
             </div>
           </article>)}
-        </div> : <div className={styles.empty}>
+        </div> : <div className="panel">
           <p>{active ? "По этому предмету пока нет преподавателей." : "Преподаватели появятся здесь после публикации визиток."}</p>
           {active && <Link href="/">Показать всех</Link>}
         </div>}
       </section>
     </main>
-  </div>;
+  </>;
 }

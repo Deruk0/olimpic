@@ -45,21 +45,23 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
         { name: "sort", label: "Сортировка", value: sort, options: [["updated", "Недавно изменённые"], ["title", "По названию · А–Я"]] },
       ]} />
       {!visible.length && <EmptyList reset={libraryPath(kind)} />}
-      {visible.map(item => {
-        const related = item.kind === "task" ? relatedTheories(item.data) : [];
-        return <article className="panel split list-card" key={item.id}><div>
-        <h2><Link href={libraryPath(kind, item.id)}>{item.title || "Без названия"}</Link></h2>
-        {(item.kind === "task" || item.kind === "theory") && <p className="muted">Тема · {item.data.topic || "Не указана"}</p>}
-        {item.kind === "task" && <div className="library-theory">
-          <span className="muted">{item.data.theoryId ? "Связанная теория" : "Теория по теме"} · </span>
-          {related.length ? related.map(theory =>
-            <Link key={theory.id} href={libraryPath("theory", theory.id)}>{theory.title || "Без названия"}</Link>
-          ) : <span className="muted">{item.data.theoryId ? "Недоступна" : "Не выбрана"}</span>}
-        </div>}
-        {item.kind === "work" && <p>{workLabels[item.data.kind]} · задач: {item.data.tasks.length}</p>}
-      </div><div className="controls"><span className={"badge" + (item.ready ? " badge-success" : " badge-neutral")}>{item.ready ? "Готово к использованию" : "Черновик"}</span>
-        <Link className="button secondary" href={libraryPath(kind, item.id)} aria-label={"Редактировать " + (item.title || "материал без названия")}>Редактировать</Link></div></article>;
-      })}
+      {visible.length > 0 && <div className="list-stack">
+        {visible.map(item => {
+          const related = item.kind === "task" ? relatedTheories(item.data) : [];
+          return <article className="split list-card" key={item.id}><div>
+          <h2><Link href={libraryPath(kind, item.id)}>{item.title || "Без названия"}</Link></h2>
+          {(item.kind === "task" || item.kind === "theory") && <p className="muted">Тема · {item.data.topic || "Не указана"}</p>}
+          {item.kind === "task" && <div className="library-theory">
+            <span className="muted">{item.data.theoryId ? "Связанная теория" : "Теория по теме"} · </span>
+            {related.length ? related.map(theory =>
+              <Link key={theory.id} href={libraryPath("theory", theory.id)}>{theory.title || "Без названия"}</Link>
+            ) : <span className="muted">{item.data.theoryId ? "Недоступна" : "Не выбрана"}</span>}
+          </div>}
+          {item.kind === "work" && <p>{workLabels[item.data.kind]} · задач: {item.data.tasks.length}</p>}
+        </div><div className="controls"><span className={"badge" + (item.ready ? " badge-success" : " badge-neutral")}>{item.ready ? "Готово к использованию" : "Черновик"}</span>
+          <Link className="button secondary" href={libraryPath(kind, item.id)} aria-label={"Редактировать " + (item.title || "материал без названия")}>Редактировать</Link></div></article>;
+        })}
+      </div>}
     </>}
   </CabinetFrame>;
 }

@@ -1,21 +1,48 @@
-.profile-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
-.profile-grid .panel { min-width: 0; margin: 0; scroll-margin-top: 1rem; }
-.profile-column { display: grid; min-width: 0; gap: 1rem; }
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--space-4);
+}
+.profile-grid > .panel { min-width: 0; margin: 0; scroll-margin-top: var(--space-4); }
+.profile-grid > .panel > h2 { margin: 0 0 var(--space-4); }
+.profile-grid[data-role="student"] > #account-settings { grid-column: 1 / -1; }
+#personal > .editor { margin: 0; gap: var(--space-4); }
 .profile-photo { display: flex; align-items: center; gap: .85rem; width: 100%; }
 .profile-photo label { flex: 1; min-width: 0; }
 .profile-remove-photo { margin-top: .65rem; }
-.profile-facts { display: grid; gap: .7rem; margin: .85rem 0 0; }
+.profile-contact { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding-block: var(--space-2); }
+.profile-contact:first-of-type { padding-block-start: 0; }
+.profile-contact:last-of-type { padding-block-end: 0; }
+.profile-contact + .profile-contact { border-top: 1px solid var(--line); }
+.profile-contact small { display: block; }
+.profile-account-body, .profile-facts { display: flex; flex-wrap: wrap; margin: 0; }
+.profile-account-body { align-items: center; justify-content: space-between; gap: var(--space-4); }
+.profile-facts { gap: var(--space-3) var(--space-6); }
 .profile-facts dt { color: var(--sub); font-size: .85rem; }
 .profile-facts dd { margin: .2rem 0 0; font-weight: 650; }
-.profile-facts + form { margin-top: 1rem; }
+.profile-telegram-body { display: grid; justify-items: start; gap: var(--space-3); }
+.profile-telegram-body p { margin: 0; }
+.profile-telegram-body .controls { gap: var(--space-2); }
+.profile-telegram-footer {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+.profile-telegram-footer .secondary { margin-inline-start: auto; }
 .theme-controls { display: grid; gap: 1rem; container-type: inline-size; }
-.theme-save-status { min-height: 1.4em; margin: .65rem 0 0; font-size: .83rem; color: var(--sub); }
+.theme-save-status { min-height: 1.55em; margin: .65rem 0 0; font-size: .83rem; color: var(--sub); }
 .theme-save-status[data-error="true"] { color: var(--danger); }
 .theme-options { width: 100%; gap: .5rem; padding: 0; border: 0; }
 .theme-mode-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .theme-palette-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .theme-options legend { margin-bottom: .5rem; padding: 0; font-size: .9rem; }
-.theme-option { position: relative; display: grid; gap: .4rem; padding: .25rem; border: 1px solid var(--control-line); border-radius: 9px; background: var(--panel); cursor: pointer; }
+.theme-option { position: relative; display: grid; gap: .4rem; padding: .25rem; border: 1px solid var(--control-line); border-radius: var(--radius-control); background: var(--panel); cursor: pointer; }
 .theme-option:hover { background: var(--surface); }
 .theme-option:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .theme-option:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -28,8 +55,6 @@
 .theme-preview > span::before, .theme-preview > span::after { content: ""; border-radius: 2px; }
 .theme-preview > span::before { width: 50%; height: 3px; background: var(--ink); opacity: .7; }
 .theme-preview > span::after { width: 100%; height: 5px; background: var(--accent); }
-.theme-preview[data-mode="light"] { --bg: #f0f2f6; --panel: #fff; --line: #d6dbe4; --ink: #263244; --accent: #536582; }
-.theme-preview[data-mode="dark"] { --bg: #141822; --panel: #252b38; --line: #414b5e; --ink: #e9edf5; --accent: #a9b7d1; }
 @media (max-width: 960px) {
   .profile-grid { grid-template-columns: minmax(0, 1fr); }
 }

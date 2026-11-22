@@ -1,16 +1,17 @@
 .statistics-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; }
 .statistics-metrics .panel { padding: 1.1rem; }
 .statistics-metrics h2 { font-size: .9rem; color: var(--sub); }
-.statistics-metrics strong { display: block; font-size: 2rem; line-height: 1.3; margin: .6rem 0; }
+.statistics-metrics strong { display: block; font-size: 2rem; line-height: 1.3; margin: .6rem 0; font-variant-numeric: tabular-nums; }
 .statistics-metrics strong small { font-size: 1rem; font-weight: 500; }
 .statistics-metrics p, .statistics-topics p, .statistics-history p { margin: .4rem 0 0; font-size: .84rem; color: var(--sub); }
-.statistics-metrics progress, .statistics-topics progress { width: 100%; height: .55rem; border: none; border-radius: 99px; overflow: hidden; accent-color: var(--accent); background: var(--soft); }
+.statistics-metrics progress, .statistics-topics progress { appearance: none; width: 100%; height: .55rem; border: none; border-radius: 99px; overflow: hidden; accent-color: var(--accent); background: var(--soft); }
 .statistics-metrics progress::-webkit-progress-bar, .statistics-topics progress::-webkit-progress-bar { background: var(--soft); }
 .statistics-metrics progress::-webkit-progress-value, .statistics-topics progress::-webkit-progress-value { background: var(--accent); }
+.statistics-metrics progress::-moz-progress-bar, .statistics-topics progress::-moz-progress-bar { background: var(--accent); }
 .statistics-statuses { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; margin: 1rem 0; }
-.statistics-statuses > div { display: grid; gap: .2rem; padding: .8rem; border-radius: 10px; background: var(--soft); }
+.statistics-statuses > div { display: grid; gap: .2rem; padding: .8rem; border-radius: var(--radius-control); background: var(--surface); }
 .statistics-statuses strong { font-size: 1.5rem; }
-.statistics-deadlines { padding: 1rem; border-radius: 10px; background: var(--warning-bg); color: var(--warning); }
+.statistics-deadlines { padding: 1rem; border-radius: var(--radius-control); background: var(--warning-bg); color: var(--warning); }
 .statistics-deadlines h3 { margin: 0; }
 .statistics-topics, .statistics-history { list-style: none; padding: 0; margin-bottom: 0; }
 .statistics-topics li, .statistics-history li { border-top: 1px solid var(--line); padding: 1rem 0; }
@@ -19,7 +20,7 @@
 .statistics-history li { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
 .statistics-history li > div:first-child { min-width: 0; }
 .statistics-history-score { display: grid; text-align: right; flex: none; }
-.statistics-history-score b { color: var(--accent); font-size: 1.2rem; }
+.statistics-history-score b { color: var(--link); font-size: 1.2rem; }
 .statistics-history-score span { color: var(--sub); font-size: .84rem; }
 @media (max-width: 1100px) { .statistics-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) {

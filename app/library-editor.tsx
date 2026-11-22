@@ -7,6 +7,7 @@ import { Theory } from "./theory-editor";
 import { TextEditor } from "./text-editor";
 import { TaskAnswerInputs, TaskOptionList } from "./task-answer";
 import { FormattedText } from "./formatted-text";
+import { ScrollArea } from "./scroll-area";
 import { libraryWorkKinds, type LibraryEntry, type LibraryKind, type LibraryTask, type LibraryWorkKind, type OptionalTaskSection, type TheoryOption } from "../lib/library";
 import { type Lesson, type Task } from "../lib/model";
 import { workLabels } from "../lib/work";
@@ -78,8 +79,8 @@ export function LibraryEditor({ kind, entry, tasks, theories }: { kind: LibraryK
   }}>
     <Hidden name="kind" value={kind} /><Hidden name="id" value={entry?.id ?? ""} />
     <nav className="library-module-nav" aria-label="Разделы редактора">
-      <button type="button" className={module === "info" ? "is-current" : ""} aria-current={module === "info" ? "step" : undefined} onClick={() => setModule("info")}>1. Название и тема</button>
-      {modules.map(([id, label], index) => <button key={id} type="button" disabled={!started} className={module === id ? "is-current" : ""} aria-current={module === id ? "step" : undefined} onClick={() => setModule(id)}>{index + 2}. {label}</button>)}
+      <button type="button" aria-current={module === "info" ? "step" : undefined} onClick={() => setModule("info")}>1. Название и тема</button>
+      {modules.map(([id, label], index) => <button key={id} type="button" disabled={!started} aria-current={module === id ? "step" : undefined} onClick={() => setModule(id)}>{index + 2}. {label}</button>)}
     </nav>
     <section className="library-module-info" hidden={module !== "info"}>
       <h3>Название и тема</h3>
@@ -94,7 +95,9 @@ export function LibraryEditor({ kind, entry, tasks, theories }: { kind: LibraryK
       <button type="button" onClick={confirmMetadata}>Подтвердить и продолжить</button>
     </section>
     {started && <div className="library-modules">
-    <div className="library-module-heading" hidden={module === "info"}><h3>{modules.find(([id]) => id === module)?.[1]}</h3><small>{title} · {topic}</small></div>
+    <p className="library-module-context" hidden={module === "info"}>
+      {title !== entry?.title && <strong>{title}</strong>}<span>{topic}</span>
+    </p>
     {kind === "theory" && <>
       <Hidden name="theory" value={JSON.stringify(theory)} />
       <div hidden={module !== "intro"}><TextEditor label="Введение или конспект" maxLength={15000} value={theory.theory} onChange={value => setTheory(current => ({ ...current, theory: value }))} /></div>
@@ -107,9 +110,9 @@ export function LibraryEditor({ kind, entry, tasks, theories }: { kind: LibraryK
           {task.theoryId && !theories.some(theory => theory.id === task.theoryId) && <option value={task.theoryId}>Теория недоступна — выберите другую</option>}
           {theories.map(theory => <option key={theory.id} value={theory.id}>{theory.title || "Без названия"}{theory.topic ? " · " + theory.topic : ""}</option>)}
         </select><small>Название выбранной теории будет видно в банке задач.</small></label>
-        {taskText("prompt", "Условие", 5000)}
+        {taskText("prompt", "Текст задачи", 5000)}
       </fieldset>
-      <fieldset hidden={module !== "answer"} className="task-builder-section"><legend>Ответ и оценка</legend>
+      <fieldset hidden={module !== "answer"} className="task-builder-section"><legend>Ответ и баллы</legend>
       <div className="formgrid"><label>Формат ответа<select name="response" value={task.response ?? "file"} onChange={event => setTask({ ...task, response: event.target.value as Task["response"], correct: [] })}>
         <option value="text">Письменный ответ</option><option value="short">Короткий ответ с автопроверкой</option><option value="single">Один вариант</option><option value="multiple">Несколько вариантов</option><option value="file">Файл с решением</option>
       </select></label>
@@ -191,14 +194,14 @@ export function LibraryEditor({ kind, entry, tasks, theories }: { kind: LibraryK
       </fieldset>
       <fieldset><legend>Банк задач · {available.length}</legend>
         <label>Поиск по названию или теме<input type="search" value={filter} onChange={event => setFilter(event.target.value)} /></label>
-        <div className="library-bank">
+        <ScrollArea label="Банк задач" viewportClassName="library-bank" contentClassName="library-bank-items">
           {available.map(item => <article className="lesson-block" key={item.id}>
             <div className="split"><div><b>{item.title}</b><br /><small>{item.data.topic} · {answerLabels[item.data.response ?? "file"]} · {item.data.max} б.</small></div>
               <button type="button" className="secondary" aria-label={"Добавить: " + item.title} disabled={selected.length >= 48} onClick={() => setSelected(current => [...current, item.id])}>+ Добавить</button></div>
             <details><summary>Условие</summary><FormattedText text={item.data.prompt} /></details>
           </article>)}
           {!available.length && <p className="muted">{filter.trim() ? "По этому запросу задач нет." : "Доступных задач пока нет."}</p>}
-        </div>
+        </ScrollArea>
       </fieldset>
       </div>
     </>}

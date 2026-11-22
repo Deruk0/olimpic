@@ -17,16 +17,12 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
   const [user, { saved, error }] = await Promise.all([requireAccount(), searchParams]);
 
   return <CabinetFrame user={user} view="profile" title="Личный профиль" saved={saved} error={error}>
-    <div className="profile-grid">
-      <div className="profile-column">
-        <PersonalDetails user={user} />
-        <LearningContacts user={user} />
-      </div>
-      <div className="profile-column">
-        <ThemeSettings />
-        {user.role === "student" && <StudentTelegram student={user.id} />}
-        <AccountSettings user={user} />
-      </div>
+    <div className="profile-grid" data-role={user.role}>
+      <PersonalDetails user={user} />
+      <ThemeSettings />
+      <LearningContacts user={user} />
+      {user.role === "student" && <StudentTelegram student={user.id} />}
+      <AccountSettings user={user} />
     </div>
   </CabinetFrame>;
 }
@@ -70,9 +66,9 @@ async function LearningContacts({ user }: { user: SessionAccount }) {
   return <section className="panel" id="learning-contacts">
     <h2>{teacher ? "Мои ученики" : "Мои преподаватели"}</h2>
     {contacts.length === 0 ? <p className="muted">{teacher ? "У вас пока нет учеников." : "У вас пока нет преподавателей."}</p> :
-      contacts.map(contact => <form key={contact.id} action={detachLearningContact.bind(null, contact.id)} className="split">
-        <span>{contact.published ? <Link href={teacherPath(contact.id)}>{contact.name}</Link> : contact.name}
-          {contact.subjects && " · " + contact.subjects.join(", ")}</span>
+      contacts.map(contact => <form key={contact.id} action={detachLearningContact.bind(null, contact.id)} className="profile-contact">
+        <div>{contact.published ? <Link href={teacherPath(contact.id)}>{contact.name}</Link> : contact.name}
+          {!!contact.subjects?.length && <small>{contact.subjects.join(", ")}</small>}</div>
         <button type="submit" className="secondary" aria-label={"Отвязать: " + contact.name}>Отвязать</button>
       </form>)}
   </section>;
@@ -81,10 +77,12 @@ async function LearningContacts({ user }: { user: SessionAccount }) {
 function AccountSettings({ user }: { user: SessionAccount }) {
   return <section className="panel" id="account-settings">
     <h2>Настройки аккаунта</h2>
-    <dl className="profile-facts">
-      <div><dt>Роль</dt><dd>{roles[user.role]}</dd></div>
-      <div><dt>Способ входа</dt><dd>{user.demo_session ? "Тестовый доступ" : "Код приглашения"}</dd></div>
-    </dl>
-    <form action={signOut}><Submit secondary pendingLabel="Выходим…">Выйти из аккаунта</Submit></form>
+    <div className="profile-account-body">
+      <dl className="profile-facts">
+        <div><dt>Роль</dt><dd>{roles[user.role]}</dd></div>
+        <div><dt>Способ входа</dt><dd>{user.demo_session ? "Тестовый доступ" : "Код приглашения"}</dd></div>
+      </dl>
+      <form action={signOut}><Submit secondary pendingLabel="Выходим…">Выйти из аккаунта</Submit></form>
+    </div>
   </section>;
 }

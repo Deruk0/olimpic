@@ -132,7 +132,7 @@ export async function issueHomework(form: FormData) {
 
 export async function gradeTask(id: string, kind: WorkKind, index: number, form: FormData) {
   const teacher = await requireAccount("teacher");
-  const path = reviewPath(id, kind);
+  const path = reviewPath(id, kind) + "?task=" + index;
   try {
     await transaction(async connection => {
       const assignment = await first<Assignment>(
@@ -169,5 +169,5 @@ export async function gradeTask(id: string, kind: WorkKind, index: number, form:
   }
   revalidatePath("/cabinet/homework");
   revalidatePath("/cabinet/review");
-  redirect(path + "?saved=1#task-" + index);
+  redirect(path + "&saved=1");
 }

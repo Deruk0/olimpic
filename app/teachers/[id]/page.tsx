@@ -25,25 +25,26 @@ export default async function TeacherPage({ params, searchParams }: Props) {
   const isStudent = user?.role === "student";
   const slots = await availableSlots(id, isStudent ? user.id : undefined);
 
-  return <div className={styles.publicPage}>
-    <PublicHeader signedIn={!!user} />
-    <main className={styles.container}>
-      <p className={styles.back}><Link href="/">← Все преподаватели</Link></p>
+  return <>
+    <PublicHeader destination={user ? "cabinet" : "login"} />
+    <main className="site-container">
+      <p className={styles.back}><Link href="/">← К преподавателям</Link></p>
       <div className={styles.profile}>
-        <section className={styles.profileCard}>
-          <TeacherIdentity name={teacher.name} subject={teacher.subjects[0]} />
-          <h1>{teacher.name}</h1>
-          <TeacherSubjects subjects={teacher.subjects} />
+        <section className={"panel " + styles.profileCard}>
+          <div className={styles.profileIdentity}>
+            <TeacherIdentity name={teacher.name} />
+            <div><h1>{teacher.name}</h1><TeacherSubjects subjects={teacher.subjects} /></div>
+          </div>
           {slots.length > 0 && (!user || isStudent) && <a className={styles.mobileBooking} href="#booking">Выбрать время ↓</a>}
           <div className={styles.bio}>
             <h2>О преподавателе</h2>
             <p>{teacher.description}</p>
           </div>
         </section>
-        <section className={styles.booking} id="booking" aria-labelledby="booking-title">
+        <section className={"panel " + styles.booking} id="booking" aria-labelledby="booking-title">
           <h2 id="booking-title">Записаться на занятие</h2>
           <HourlyRate rate={teacher.hourly_rate} />
-          <p className={styles.muted}>Оплата напрямую преподавателю.</p>
+          <p className="muted">Оплата напрямую преподавателю.</p>
           {query.sent === "1" && <p className="notice" role="status">Заявка отправлена. Ответ появится в «Моих заявках».</p>}
           {typeof query.error === "string" && <p className="notice error" role="alert">{query.error}</p>}
           {slots.length ? isStudent ? <form className={styles.bookingForm} action={requestBooking.bind(null, id)}>
@@ -54,21 +55,21 @@ export default async function TeacherPage({ params, searchParams }: Props) {
                 <time dateTime={new Date(slot.starts).toISOString()}>{formatLessonTime(slot.starts)}</time>
               </label>)}
             </fieldset>
-            <label className={styles.comment}>Комментарий <span>· необязательно</span>
+            <label className={styles.comment}>Комментарий <span>(необязательно)</span>
               <textarea name="comment" rows={3} maxLength={500} placeholder="Например, к какому экзамену готовитесь" />
             </label>
             <Submit pendingLabel="Отправляем…">Записаться</Submit>
           </form> : <>
-            {!user && <Link className={styles.primary} href={bookingLoginPath(id)}>Войти, чтобы записаться</Link>}
+            {!user && <Link className="button" href={bookingLoginPath(id)}>Войти, чтобы записаться</Link>}
             <h3 className={styles.slotTitle}>Свободные окна</h3>
             <ul className={styles.slotList}>{slots.map(slot => <li className={styles.slot} key={slot.id}>
               <time dateTime={new Date(slot.starts).toISOString()}>{formatLessonTime(slot.starts)}</time>
             </li>)}</ul>
           </> : <p className={styles.noSlots}>Доступных окон для записи пока нет.</p>}
           {isStudent && <p className={styles.bookingLink}><Link href="/cabinet/bookings">Мои заявки →</Link></p>}
-          {user?.id === id && <Link className={styles.outline} href="/cabinet/visit-card">Редактировать визитку</Link>}
+          {user?.id === id && <Link className="button secondary" href="/cabinet/visit-card">Редактировать визитку</Link>}
         </section>
       </div>
     </main>
-  </div>;
+  </>;
 }

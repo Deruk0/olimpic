@@ -6,8 +6,9 @@ import { studentAssignments, studentWorks } from "../../../lib/student";
 import { workLabels, workScore, workStates, workTitle } from "../../../lib/work";
 import { CabinetFrame } from "../frame";
 import { InterfaceIcon } from "../../interface-icons";
-import { EmptyList, ListFilters } from "../../list-filters";
+import { EmptyList } from "../../list-filters";
 import { WorkBadge } from "../work-badge";
+import "./homework.css";
 
 const filters = { all: "Все", ...workStates };
 const types = { all: "Все типы", ...workLabels };
@@ -19,40 +20,67 @@ export default async function HomeworkIndex({ searchParams }: { searchParams: Pr
   const activeKind = typeof kind === "string" && Object.hasOwn(types, kind) ? kind : "all";
   const search = typeof q === "string" ? q.trim().slice(0, 120) : "";
   const sort = requestedSort === "oldest" || requestedSort === "title" ? requestedSort : "newest";
-  const visible = studentWorks(assignments).filter(work =>
+  const hasFilters = activeKind !== "all" || sort !== "newest";
+  const works = studentWorks(assignments);
+  const visible = works.filter(work =>
     (active === "all" || active === work.state) && (activeKind === "all" || activeKind === work.kind) &&
     (workTitle(work.assignment, work.kind) + " " + work.assignment.teacher_name).toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru"))
   ).sort((a, b) => sort === "title" ? workTitle(a.assignment, a.kind).localeCompare(workTitle(b.assignment, b.kind), "ru") :
     (new Date(a.assignment.starts).getTime() - new Date(b.assignment.starts).getTime()) * (sort === "oldest" ? 1 : -1));
+  const toDo = visible.filter(work => work.state === "pending" || work.state === "overdue");
+  const sent = visible.filter(work => work.state === "awaiting" || work.state === "reviewed");
   return <CabinetFrame user={user} view="homework" title="Домашние задания">
-    <ListFilters action="/cabinet/homework" search={search} placeholder="Название или преподаватель" reset="/cabinet/homework" count={visible.length} filters={[
-      { name: "kind", label: "Тип работы", value: activeKind, options: Object.entries(types) },
-      { name: "status", label: "Статус", value: active, options: Object.entries(filters) },
-      { name: "sort", label: "Сортировка", value: sort, options: [["newest", "Сначала новые"], ["oldest", "Сначала ранние"], ["title", "По названию · А–Я"]] },
-    ]} />
-    {visible.length === 0 && <EmptyList reset="/cabinet/homework" />}
-    {visible.map(({ assignment, kind, tasks, deadline, state }) => {
-      const { score, total, graded } = workScore(tasks, assignment);
-      const lesson = assignment.lesson_id ?? (assignment.entry_kind === "lesson" ? assignment.id : null);
-      const path = workPath(assignment.id, kind);
-      return <article className="panel list-card" key={assignment.id + kind}>
-        <div className="split"><h2 className="section-title"><InterfaceIcon name="homework" /><Link href={path}>{workTitle(assignment, kind)}</Link></h2><WorkBadge state={state} /></div>
-        <p className="muted">{assignment.teacher_name} · {workLabels[kind]} · заданий {tasks.length}</p>
-        <div className="split">
-          <div>{deadline && <p>Сдать до <time dateTime={deadline.toISOString()}>{formatLessonTime(deadline)}</time></p>}
-            {!!graded.length && <p><strong>{score} / {total} б.</strong>{graded.length < tasks.length && " · Проверено " + graded.length + " из " + tasks.length}</p>}
+    <div className="homework-toolbar">
+      <nav className="cabinet-tabs" aria-label="Статусы работ">
+        {Object.entries(filters).map(([key, label]) => <Link key={key} scroll={false} aria-current={key === active ? "page" : undefined}
+          href={{ pathname: "/cabinet/homework", query: { status: key, kind: activeKind, q: search || undefined, sort } }}>{label}</Link>)}
+      </nav>
+      <form action="/cabinet/homework" method="get" className="homework-filters" key={JSON.stringify([search, active, activeKind, sort])}>
+        <input type="hidden" name="status" value={active} />
+        <label className="homework-search"><InterfaceIcon name="search" />
+          <input type="search" name="q" aria-label="Поиск по названию или преподавателю" defaultValue={search} placeholder="Поиск" maxLength={120} />
+        </label>
+        <details>
+          <summary data-active={hasFilters} aria-label={hasFilters ? "Фильтры активны" : undefined}>Фильтры</summary>
+          <div className="homework-filter-options">
+            <label>Тип работы<select name="kind" defaultValue={activeKind}>{Object.entries(types).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+            <label>Сортировка<select name="sort" defaultValue={sort}>
+              <option value="newest">Сначала новые</option><option value="oldest">Сначала ранние</option><option value="title">По названию</option>
+            </select></label>
           </div>
-          <div className="controls">
-            {lesson && <Link className="button secondary" href={lessonPath(lesson)}>К уроку</Link>}
-            <Link className="button" href={path}>{state === "reviewed" ? "Посмотреть результат" : state === "awaiting" ? "Посмотреть работу" :
-              state === "overdue" ? "Сдать с опозданием" : "Открыть задания"}</Link>
+        </details>
+        <button className="secondary" type="submit">Показать</button>
+      </form>
+    </div>
+    {visible.length === 0 && (works.length ? <EmptyList reset="/cabinet/homework" /> : <p className="panel muted">Преподаватели пока не выдали вам работы.</p>)}
+    {([["Нужно сдать", toDo], ["Отправленные", sent]] as const).map(([title, group]) => group.length > 0 && <section key={title} className="homework-group">
+      <h2>{title}</h2>
+      <div className="homework-list">
+      {group.map(({ assignment, kind, tasks, deadline, state }, index) => {
+        const { score, total, graded } = workScore(tasks, assignment);
+        const lesson = assignment.lesson_id ?? (assignment.entry_kind === "lesson" ? assignment.id : null);
+        const path = workPath(assignment.id, kind);
+        const actionable = state === "pending" || state === "overdue";
+        return <article className="homework-row" key={assignment.id + kind}>
+          <div className="homework-title">
+            <InterfaceIcon name="homework" />
+            <div><h3><Link href={path}>{workTitle(assignment, kind)}</Link></h3>
+              <small>{workLabels[kind]} · заданий {tasks.length}{lesson && <> · <Link href={lessonPath(lesson)}>К уроку</Link></>}</small></div>
           </div>
-        </div>
-        {graded.some(grade => grade.comment) && <details>
-          <summary>Комментарии к заданиям</summary>
-          <ul>{graded.filter(grade => grade.comment).map(grade => <li key={grade.index}><b>{grade.title}</b> · {grade.comment}</li>)}</ul>
-        </details>}
-      </article>;
-    })}
+          <p className="muted homework-teacher">{assignment.teacher_name}</p>
+          <div className="homework-dates">
+            {deadline && <span>До <time dateTime={deadline.toISOString()}>{formatLessonTime(deadline)}</time></span>}
+            {!!graded.length && <small>{score} из {total} б.{graded.length < tasks.length && " · проверено " + graded.length + " из " + tasks.length}</small>}
+          </div>
+          <div><WorkBadge state={state} /></div>
+          <Link className={"button" + (actionable && index === 0 ? "" : " secondary")} href={path}>{state === "reviewed" ? "Результат" : state === "overdue" ? "Сдать" : "Открыть"}</Link>
+          {graded.some(grade => grade.comment) && <details className="homework-comments">
+            <summary>Комментарии к заданиям</summary>
+            <ul>{graded.filter(grade => grade.comment).map(grade => <li key={grade.index}><b>{grade.title}</b> · {grade.comment}</li>)}</ul>
+          </details>}
+        </article>;
+      })}
+      </div>
+    </section>)}
   </CabinetFrame>;
 }

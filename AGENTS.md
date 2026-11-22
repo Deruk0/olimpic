@@ -4,6 +4,7 @@
 
 ## Где работать
 
+- Для задач по визуальному оформлению и текстам интерфейса используй глобальный навык `dakemo-unslop-design`.
 - `app/cabinet/` — страницы ученика и преподавателя. `app/actions.ts` и `app/library-actions.ts` — серверные действия.
 - `app/text-editor.tsx` и `app/rich-document.tsx` — редактор Tiptap и отображение сохранённых документов.
 - `lib/auth.ts` — сессии и доступ. `lib/library.ts`, `lib/work.ts`, `lib/student.ts` — библиотека, работы и данные ученика.

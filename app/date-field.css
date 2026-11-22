@@ -15,12 +15,12 @@
   width: min(100% - 1.5rem, 22rem);
   padding: 1.1rem;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius-panel);
   background: var(--panel);
   color: var(--ink);
-  box-shadow: 0 12px 36px #29145026;
+  box-shadow: var(--overlay-shadow);
 }
-.date-field-dialog::backdrop { background: #231b3652; }
+.date-field-dialog::backdrop { background: var(--scrim); }
 .date-field-dialog .rdp-root {
   --rdp-accent-color: var(--accent);
   --rdp-accent-background-color: var(--soft);
@@ -28,7 +28,7 @@
   --rdp-day-width: 39px;
   --rdp-day_button-height: 36px;
   --rdp-day_button-width: clamp(27px, 10vw, 36px);
-  --rdp-day_button-border-radius: 9px;
+  --rdp-day_button-border-radius: var(--radius-control);
   --rdp-selected-border: 0;
 }
 .date-field-dialog .rdp-months, .date-field-dialog .rdp-month, .date-field-dialog .rdp-month_grid { width: 100%; max-width: none; }

@@ -2,10 +2,13 @@ CREATE TABLE IF NOT EXISTS accounts (
   id text PRIMARY KEY,
   name text NOT NULL,
   role text NOT NULL CHECK (role IN ('student', 'teacher')),
-  theme text NOT NULL DEFAULT 'light' CHECK (theme IN ('light', 'dark')),
-  theme_palette text NOT NULL DEFAULT 'purple' CHECK (theme_palette IN ('purple', 'blue', 'turquoise')),
+  theme text NOT NULL DEFAULT 'dark' CHECK (theme IN ('light', 'dark')),
+  theme_palette text NOT NULL DEFAULT 'blue' CHECK (theme_palette IN ('purple', 'blue', 'turquoise')),
   UNIQUE (id, role)
 );
+
+ALTER TABLE accounts ALTER COLUMN theme SET DEFAULT 'dark';
+ALTER TABLE accounts ALTER COLUMN theme_palette SET DEFAULT 'blue';
 
 CREATE TABLE IF NOT EXISTS teacher_profiles (
   teacher_id text PRIMARY KEY,

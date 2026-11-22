@@ -30,7 +30,7 @@ export function ListFilters({ action, search, placeholder, filters, hidden = {},
       </label>)}
       <button type="submit">Показать</button>
     </form>
-    <div className="list-results"><span role="status">Найдено · {count}</span><Link href={reset}>Сбросить фильтры</Link></div>
+    <div className="list-results"><span role="status">Найдено {count}</span><Link href={reset}>Сбросить фильтры</Link></div>
   </section>;
 }
 

@@ -8,5 +8,8 @@ export function Hidden({ name, value }: { name: string; value: string | number }
 }
 export function Submit({ children, secondary = false, pendingLabel = "Сохранение…" }: { children: ReactNode; secondary?: boolean; pendingLabel?: string }) {
   const { pending } = useFormStatus();
-  return <button disabled={pending} className={secondary ? "secondary" : ""}>{pending ? pendingLabel : children}</button>;
+  return <button type="submit" disabled={pending} aria-busy={pending} className={"submit-button" + (secondary ? " secondary" : "")}>
+    <span aria-hidden={pending}>{children}</span>
+    <span aria-hidden={!pending}>{pendingLabel}</span>
+  </button>;
 }

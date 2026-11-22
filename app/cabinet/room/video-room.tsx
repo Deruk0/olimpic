@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { roomPath } from "../../../lib/paths";
 import { mediaBits, roomImageLimit, roomTextLimit, type RoomMedia, type RoomMessage, type RoomSnapshot } from "../../../lib/room-protocol";
+import { InterfaceIcon, type InterfaceIconName } from "../../interface-icons";
+import { ScrollArea } from "../../scroll-area";
 import { startRoom } from "./room-client";
 import styles from "./video-room.module.css";
 
@@ -11,6 +13,11 @@ const labels: Record<RoomMedia, [string, string]> = {
   audio: ["Включить микрофон", "Выключить микрофон"],
   camera: ["Включить камеру", "Выключить камеру"],
   screen: ["Показать экран", "Остановить показ"]
+};
+const callControls: Record<RoomMedia, { label: string; icon: InterfaceIconName }> = {
+  audio: { label: "Микрофон", icon: "microphone" },
+  camera: { label: "Камера", icon: "camera" },
+  screen: { label: "Экран", icon: "screen" },
 };
 const connectionLabels = {
   waiting: "Ожидаем собеседника", new: "Устанавливаем связь", connecting: "Устанавливаем связь",
@@ -91,43 +98,59 @@ export function VideoRoom({ id, teacher, peerName, iceServers }: {
   const peerMedia = peer?.online ? peer.media : 0;
   const remoteScreen = Boolean(peerMedia & mediaBits.screen);
   const remoteCamera = Boolean(peerMedia & mediaBits.camera);
+  const sharing = remoteScreen || !!local.screen;
   const attention = !peer?.online ? "Ученик не в комнате" : peer.focused === true ? "Ученик на вкладке урока" :
     peer.focused === false ? "Ученик переключил вкладку или окно" : "Статус вкладки неизвестен";
+  const peerLabel = peer?.online ? peerName : "Ожидаем подключения…";
+  const soundBlocked = needsSound && Boolean(peerMedia & mediaBits.audio);
+  const canReconnect = connection === "failed" || connection === "disconnected";
 
   return <div className={styles.room}>
+    <div className={styles.topLine}>
+      <span className="badge" role="status">{connectionLabels[connection]}</span>
+      {teacher && <div className={styles.attention} data-focus={!peer?.online ? "waiting" : String(peer.focused)} role="status">
+        <strong>{attention}</strong>
+        {peer && <span>Потерь фокуса · {peer.distraction_count}</span>}
+      </div>}
+    </div>
     <section className={styles.call} id="room-call" aria-label="Видеосвязь">
-      <div className={styles.topLine}>
-        <span className="badge" role="status">{connectionLabels[connection]}</span>
-        {teacher && <div className={styles.attention} data-focus={!peer?.online ? "waiting" : String(peer.focused)} role="status">
-          <strong>{attention}</strong>
-          {peer && <span>Потерь фокуса · {peer.distraction_count}</span>}
-        </div>}
-      </div>
-      {remoteScreen && <Picture stream={remote.screen} active label={"Экран · " + peerName} screen />}
-      {local.screen && <Picture stream={local.screen} active label="Вы показываете экран" screen />}
-      <div className={styles.tiles}>
-        <Picture stream={remote.camera} active={remoteCamera} label={peer?.online ? peerName : "Ожидаем подключения…"} />
-        <Picture stream={local.camera} active={!!local.camera} label="Вы" />
+      <div className={styles.presentation}>
+        <h2><InterfaceIcon name={sharing ? "screen" : "camera"} /> {sharing ? "Демонстрация экрана" : "Видеосвязь"}</h2>
+        <div className={styles.stage}>
+          {sharing ? <>
+            {remoteScreen && <Picture stream={remote.screen} active label={"Экран · " + peerName} screen />}
+            {local.screen && <Picture stream={local.screen} active label="Вы показываете экран" screen />}
+          </> : <Picture stream={remote.camera} active={remoteCamera} label={peerLabel} />}
+        </div>
       </div>
       <audio ref={audio} autoPlay />
-      <div className="controls">
-        {(Object.keys(labels) as RoomMedia[]).map(kind => <button key={kind} className="secondary"
+      <div className={"controls " + styles.dock}>
+        {(Object.keys(callControls) as RoomMedia[]).map(kind => <button key={kind} className={local[kind] ? undefined : "secondary"}
+          aria-pressed={!!local[kind]} title={labels[kind][local[kind] ? 1 : 0]}
           disabled={busy[kind]} onClick={async () => {
             setError("");
             setBusy(previous => ({ ...previous, [kind]: true }));
             try { await room.current?.toggle(kind); }
             finally { setBusy(previous => ({ ...previous, [kind]: false })); }
-          }}>{labels[kind][local[kind] ? 1 : 0]}</button>)}
-        {needsSound && Boolean(peerMedia & mediaBits.audio) && <button className="secondary" onClick={() => {
+          }}><InterfaceIcon name={callControls[kind].icon} />{callControls[kind].label}</button>)}
+        <a className={styles.jump} href="#room-chat">К чату ↓</a>
+        <Link className={"button " + styles.leave} href="/cabinet/schedule" onClick={() => room.current?.stop()}><InterfaceIcon name="logout" />Выйти из урока</Link>
+      </div>
+      {(soundBlocked || canReconnect) && <div className="controls">
+        {soundBlocked && <button className="secondary" onClick={() => {
           void audio.current?.play().then(() => setNeedsSound(false)).catch(() => {});
         }}>Включить звук собеседника</button>}
-        {(connection === "failed" || connection === "disconnected") && <button className="secondary" onClick={enter}>Переподключить</button>}
-        <a className={styles.jump} href="#room-chat">К чату ↓</a>
-        <Link className={styles.leave} href="/cabinet/schedule" onClick={() => room.current?.stop()}>Выйти из урока</Link>
-      </div>
+        {canReconnect && <button className="secondary" onClick={enter}>Переподключить</button>}
+      </div>}
       {error && <p className="notice error" role="alert">{error}</p>}
     </section>
-    <RoomChat id={id} messages={messages} peerName={peerName} send={(key, body, image) => room.current!.message(key, body, image)} />
+    <div className={styles.communication}>
+      <div className={styles.tiles}>
+        {sharing && <Picture stream={remote.camera} active={remoteCamera} label={peerLabel} />}
+        <Picture stream={local.camera} active={!!local.camera} label="Вы" />
+      </div>
+      <RoomChat id={id} messages={messages} peerName={peerName} send={(key, body, image) => room.current!.message(key, body, image)} />
+    </div>
   </div>;
 }
 
@@ -173,7 +196,7 @@ function RoomChat({ id, messages, peerName, send }: {
 
   return <section className={styles.chat} id="room-chat" aria-labelledby="chat-title">
     <div className="split"><h2 id="chat-title">Чат урока</h2><a className={styles.jump} href="#room-call">К звонку ↑</a></div>
-    <div ref={list} className={styles.messages} role="log" aria-label="Сообщения" tabIndex={0} onScroll={event => {
+    <ScrollArea scrollRef={list} viewportClassName={styles.messages} contentClassName={styles.messageList} role="log" label="Сообщения" onScroll={event => {
       const target = event.currentTarget;
       follow.current = target.scrollHeight - target.clientHeight - target.scrollTop < 40;
     }}>
@@ -185,7 +208,7 @@ function RoomChat({ id, messages, peerName, send }: {
           <img src={roomPath(id) + "/image/" + message.id} alt="Изображение из чата" />
         </a>}
       </article>)}
-    </div>
+    </ScrollArea>
     <form className={styles.chatForm} onSubmit={submit} onPaste={event => {
       const image = Array.from(event.clipboardData.items).find(item => item.type.startsWith("image/"))?.getAsFile();
       if (image && !sending) { event.preventDefault(); select(image); }
