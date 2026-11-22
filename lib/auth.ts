@@ -26,6 +26,7 @@ export async function account() {
 }
 export async function requireAccount(role?: Role) {
   const user = await account();
-  if (!user || (role && user.role !== role)) redirect("/");
+  if (!user) redirect("/login");
+  if (role && user.role !== role) redirect("/cabinet");
   return user;
 }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { first } from "../../../lib/db";
 import {
   editProfileGoalPath, emptyStudentGoal, goalAdmissionPlans, goalCompetitions, goalDirections, goalKinds,
-  goalOptionLabel, goalResults, type StudentGoal,
+  goalOptionLabel, goalResultText, type StudentGoal,
 } from "../../../lib/student-goal";
 import { InterfaceIcon } from "../../interface-icons";
 import { GoalForm } from "./goal-form";
@@ -33,7 +33,7 @@ export async function GoalSection({ student, mode }: { student: string; mode?: s
         <GoalOverview goal={saved.details} />
         {visual}
       </div>
-      : <p className="muted goal-empty">Выберите, к какой олимпиаде готовитесь, и запишите свой следующий шаг.</p>}
+      : <p className="muted goal-empty">Расскажите, чего хотите достичь на олимпиаде и какие направления вас интересуют.</p>}
   </section>;
 }
 
@@ -41,9 +41,8 @@ function GoalOverview({ goal }: { goal: StudentGoal }) {
   const directions = goal.directions.map(key => goalOptionLabel(goalDirections, key)).filter(Boolean).join(", ");
   const preparation = [
     ["Целевая олимпиада", goal.competitionName || goalOptionLabel(goalCompetitions, goal.competition)],
-    ["Желаемый результат", goalOptionLabel(goalResults, goal.result)],
+    ["Желаемый результат", goalResultText(goal)],
     ["Напоминание себе", goal.reason],
-    ["Ближайший шаг", goal.nextStep],
   ].filter(([, value]) => value);
   const admission = [
     ["Целевой вуз", goal.university],

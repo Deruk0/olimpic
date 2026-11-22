@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { account, hash, token } from "../../../lib/auth";
 import { first, rows, transaction } from "../../../lib/db";
+import { canReviewInquiries, isDesignatedInquiryReviewer } from "../../../lib/inquiry-access";
 
 export type DevResult = { error: string; message?: string; code?: string };
 const text = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
@@ -47,8 +48,12 @@ export async function createManagedGroup(_previous: DevResult, form: FormData): 
 }
 
 export async function issueManagedInvite(_previous: DevResult, form: FormData): Promise<DevResult> {
-  if ((await account())?.role !== "methodist") return { error: "Выдача приглашений недоступна." };
+  const user = await account();
+  if (user?.role !== "methodist") return { error: "Выдача приглашений недоступна." };
   const id = text(form, "account");
+  if (isDesignatedInquiryReviewer(id) && !canReviewInquiries(user)) {
+    return { error: "Приглашение для этого аккаунта может выдать сотрудник с доступом к заявкам." };
+  }
   const code = token();
   try {
     const recipient = await first<{ name: string }>("SELECT name FROM accounts WHERE id=$1", [id]);

@@ -12,15 +12,27 @@
 .profile-goal > .split h2 { margin: 0; }
 .goal-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 17rem); align-items: start; gap: clamp(1rem, 3vw, 2rem); width: 100%; }
 .goal-empty, .goal-overview { margin: .85rem 0 0; }
+.goal-edit-hint { margin: 0; max-width: 62ch; }
 .goal-fields, .goal-admission { display: grid; gap: 1rem; min-width: 0; }
 .goal-fields h3 { margin: 0; font-size: 1rem; }
 .goal-primary { margin: .25rem 0 0; color: var(--accent); font-weight: 750; }
-.goal-facts dd { white-space: pre-wrap; }
+.goal-facts dd { white-space: pre-wrap; overflow-wrap: anywhere; }
 .goal-admission { border-top: 1px solid var(--line); padding-top: 1rem; }
 .goal-admission .goal-facts { margin: 0; }
 .goal-choices { border: 0; padding: 0; gap: .5rem; }
 .goal-choices legend { padding: 0; margin-bottom: .4rem; }
-.goal-directions { grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); }
+.goal-directions { min-width: 0; }
+.goal-direction-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .5rem; }
+.goal-direction-picker select { min-width: 0; }
+.goal-direction-picker button { white-space: nowrap; }
+.goal-directions > small { display: block; margin-top: .35rem; }
+.goal-selected-directions { display: flex; flex-wrap: wrap; gap: .4rem; margin: .6rem 0 0; padding: 0; list-style: none; }
+.goal-selected-directions li {
+  display: flex; align-items: center; gap: .25rem; max-width: 100%;
+  padding-left: .65rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: .85rem;
+}
+.goal-selected-directions span { min-width: 0; overflow-wrap: anywhere; }
+.goal-selected-directions button { flex: none; min-width: 2rem; min-height: 2rem; padding: 0; font-size: 1.1rem; }
 .goal-form .goal-choices label { display: flex; align-items: center; gap: .5rem; font-weight: 500; }
 .goal-form input:is([type=radio], [type=checkbox]) { flex: none; width: auto; padding: 0; margin: 0; }
 .goal-visual { margin: 0; }

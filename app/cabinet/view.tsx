@@ -49,6 +49,13 @@ export async function renderCabinet(query: CabinetQuery, detail?: string) {
     view === "review" && !submissions.some(s => s.assignment === detail && s.student === query.student) ? undefined :
     assignments.find(a => a.id === detail)?.content.title);
   if (detail && !detailTitle) notFound();
+  const sharedGoal = detail && user.role === "curator" && view === "students"
+    ? await first<{ result_text: string | null }>(
+      "SELECT p.details->>'resultText' AS result_text FROM student_goal_profiles p " +
+      "JOIN members m ON m.student=p.student JOIN groups g ON g.id=m.group_id WHERE p.student=$1 AND g.curator=$2",
+      [detail, user.id]
+    )
+    : null;
   const reviews = view === "review" ? submissions.flatMap(submission => {
     const assignment = assignments.find(a => a.id === submission.assignment);
     const member = members.find(m => m.id === submission.student && m.group_id === assignment?.group_id);
@@ -87,7 +94,7 @@ export async function renderCabinet(query: CabinetQuery, detail?: string) {
             <ProgramEditor key={editorLevel} level={editorLevel} initial={selected?.draft ?? emptyProgram} />
           </section>
         </>}
-        {user.role === "methodist" && view === "groups" && <>
+        {view === "groups" && <>
           {!detail && <ListFilters action="/cabinet" hidden={{ view }} search={search} placeholder="Название группы" reset="/cabinet?view=groups" count={visibleGroups.length} filters={[
             { name: "sort", label: "Сортировка", value: listSort, options: [["name", "По названию · А–Я"], ["reverse", "По названию · Я–А"]] },
           ]} />}
@@ -97,25 +104,38 @@ export async function renderCabinet(query: CabinetQuery, detail?: string) {
           <Link className="button secondary" href={detailPath(view, group.id)}>Посмотреть прогресс</Link>
         </section> : <section className="panel" key={group.id}>
           <h2>{group.name}</h2>
+          {user.role === "curator" && <Link className="button secondary" href={"/cabinet?view=schedule&group=" + encodeURIComponent(group.id)}>Расписание группы</Link>}
+          {!members.some(member => member.group_id === group.id) && <p className="muted">В группе пока нет учеников.</p>}
           <div className="roster">{members.filter(m => m.group_id === group.id).map(member => {
-            const work = assignments.filter(a => a.group_id === member.group_id).flatMap(a => workSections(a, submissions.find(s => s.student === member.id && s.assignment === a.id)));
+            const activeAssignments = assignments.filter(a => a.group_id === group.id && !a.deleted_at);
+            const work = activeAssignments.flatMap(a => workSections(a, submissions.find(s => s.student === member.id && s.assignment === a.id)));
             const trajectory = trajectories.find(t => t.student === member.id);
-            const groupAssignments = new Set(assignments.filter(a => a.group_id === group.id).map(a => a.id));
+            const groupAssignments = new Set(activeAssignments.map(a => a.id));
             const visited = attendance.filter(item => item.student === member.id && groupAssignments.has(item.assignment)).length;
-            return <div key={member.id}><b>{member.name}</b><span>{work.filter(s => s.state !== "pending").length} сдано · {work.filter(s => s.state === "reviewed").length} проверено</span><span>Посещено: {visited}</span><span>{trajectory ? levels[trajectory.level] + " · " + trajectory.topics.length + " тем" : "План готовится"}</span></div>;
+            return <div key={member.id}>
+              <b>{user.role === "curator" ? <Link href={detailPath("students", member.id)}>{member.name}</Link> : member.name}</b>
+              <span>{work.filter(s => s.state !== "pending").length} сдано · {work.filter(s => s.state === "reviewed").length} проверено</span>
+              <span>Посещено: {visited}</span><span>{trajectory ? levels[trajectory.level] + " · " + trajectory.topics.length + " тем" : "План готовится"}</span>
+            </div>;
           })}</div>
-          <form action={mutate} className="editor"><Hidden name="action" value="guidance" /><Hidden name="return" value="groups" /><Hidden name="group" value={group.id} />
+          {user.role === "methodist" && <form action={mutate} className="editor"><Hidden name="action" value="guidance" /><Hidden name="return" value="groups" /><Hidden name="group" value={group.id} />
             <Hidden name="detail" value="yes" />
             <label>Рекомендация куратору<textarea name="message" rows={2} required maxLength={1500} /></label><Submit>Отправить рекомендацию</Submit>
-          </form>
+          </form>}
           {guidance.filter(item => item.group_id === group.id).map(item => <p key={item.id} className="notice">{item.message}</p>)}
         </section>) : null}</>}
         {user.role === "curator" && view === "schedule" && <>
           {query.deleted === "1" && <p className="notice" role="status">Занятие удалено из расписания. Сданные работы доступны в разделе проверки.</p>}
           {!detail && <>
-            <p className="muted">{groups.map(group => group.name).join(" · ") || "У вас пока нет назначенных групп."}</p>
+            {groups.length === 0 ? <p className="muted">У вас пока нет назначенных групп.</p> :
+              <nav className="chips" aria-label="Группы в расписании">
+                {groupOptions.map(([id, name]) => <Link key={id} className={groupFilter === id ? "active" : ""}
+                  aria-current={groupFilter === id ? "page" : undefined}
+                  href={"/cabinet?view=schedule" + (id ? "&group=" + encodeURIComponent(id) : "")}>{name}</Link>)}
+              </nav>}
             <details className="panel" open={!!query.error}><summary>+ Назначить входную диагностику</summary><ScheduleEditor groups={groups} programs={published.filter(program => program.level === "diagnostic")} /></details>
-            <ScheduleSections assignments={assignments} render={assignment => <section className="panel" key={assignment.id}><AssignmentHeader assignment={assignment} href={detailPath(view, assignment.id)} /></section>} />
+            <ScheduleSections assignments={assignments.filter(a => !groupFilter || a.group_id === groupFilter)}
+              render={assignment => <section className="panel" key={assignment.id}><AssignmentHeader assignment={assignment} href={detailPath(view, assignment.id)} /></section>} />
             {!!guidance.length && <section className="panel"><h2>Рекомендации методиста</h2>
               {guidance.map(item => <p className="notice" key={item.id}><b>{groups.find(g => g.id === item.group_id)?.name}</b><br />{item.message}</p>)}
             </section>}
@@ -140,7 +160,7 @@ export async function renderCabinet(query: CabinetQuery, detail?: string) {
             {assignment.starts && assignment.settings.format !== "self" && <details><summary>Посещаемость</summary><div className="roster">
               {members.filter(m => m.group_id === assignment.group_id).map(member => {
                 const attended = attendance.some(item => item.assignment === assignment.id && item.student === member.id);
-                return <div className="split" key={member.id}><b>{member.name}</b><form action={mutate}>
+                return <div className="split" key={member.id}><b><Link href={detailPath("students", member.id)}>{member.name}</Link></b><form action={mutate}>
                   <Hidden name="action" value="attendance" /><Hidden name="return" value="schedule" /><Hidden name="assignment" value={assignment.id} /><Hidden name="student" value={member.id} /><Hidden name="attended" value={attended ? "no" : "yes"} />
                   <Hidden name="detail" value="yes" />
                   <Submit secondary>{attended ? "✓ Посещено · снять" : "Отметить посещение"}</Submit>
@@ -198,18 +218,60 @@ export async function renderCabinet(query: CabinetQuery, detail?: string) {
             const choices = (level: Level) => [...new Set([...(published.find(p => p.level === level)?.published?.lessons.map(l => l.topic) ?? []), ...(diagnostic?.content.tasks.map(t => t.topic) ?? [])])];
             const status = previous ? "План опубликован" : result ? "Готова рекомендация" : "Ожидает диагностику";
             if (!detail) return <article className="panel split list-card" key={member.id}><div><h2><Link href={detailPath(view, member.id)}>{member.name}</Link></h2><p className="muted">{member.group_name}</p><span className="badge">{status}</span></div><Link className="button secondary" href={detailPath(view, member.id)}>Открыть траекторию</Link></article>;
-            return <section className="panel work" key={member.id}>
+            return <div key={member.id}>
+            <section className="panel work">
               <span className="badge">{status}</span>
-              <p className="muted">{member.group_name} · {member.goal || "Цель пока не указана"}</p>
+              <p className="muted"><Link href={detailPath("groups", member.group_id)}>{member.group_name}</Link>{member.goal && " · " + member.goal}</p>
+              {sharedGoal?.result_text && <div>
+                <h2>Желаемый результат</h2>
+                <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{sharedGoal.result_text}</p>
+              </div>}
               {!result ? <p>Рекомендация появится после проверки всех заданий диагностики.</p> : <>
                 <p><b>{levels[result.level]}</b> · {Math.round(result.percent * 10) / 10}% за диагностику. Порог продвинутого уровня — {result.threshold}%. Темы ниже {result.priorityThreshold}% стоят первыми в черновике.</p>
                 <div className="chips">{result.results.map(topic => <span key={topic.name}>{topic.name} · {Math.round(topic.percent)}%</span>)}</div>
                 <TrajectoryEditor key={JSON.stringify(previous ?? result)} student={member.id} initial={previous?.topics ?? result.topics} level={previous?.level ?? result.level} options={{ basic: choices("basic"), advanced: choices("advanced") }} />
               </>}
-            </section>;
+            </section>
+            <StudentLessonProgress member={member} assignments={assignments} submissions={submissions} attendance={attendance} />
+            </div>;
           })}
         </>}
   </CabinetFrame>;
+}
+function StudentLessonProgress({ member, assignments, submissions, attendance }: {
+  member: Member; assignments: Assignment[]; submissions: Submission[]; attendance: Attendance[];
+}) {
+  const studentSubmissions = new Map(submissions.filter(s => s.student === member.id).map(s => [s.assignment, s]));
+  const visits = new Set(attendance.filter(item => item.student === member.id).map(item => item.assignment));
+  const lessons = assignments.filter(a => a.group_id === member.group_id && !a.deleted_at).map(assignment => {
+    const submission = studentSubmissions.get(assignment.id);
+    return { assignment, submission, works: workSections(assignment, submission) };
+  });
+  const works = lessons.flatMap(lesson => lesson.works);
+  return <section className="panel">
+    <h2>Прогресс по урокам</h2>
+    {!lessons.length ? <p className="muted">Группе пока не назначили занятия.</p> : <>
+      <div className="chips">
+        <span>Посещено: {lessons.filter(({ assignment }) => visits.has(assignment.id)).length}</span>
+        <span>Работ сдано: {works.filter(work => work.state !== "pending").length} из {works.length}</span>
+        <span>Проверено: {works.filter(work => work.state === "reviewed").length}</span>
+      </div>
+      <div className="roster">
+        {lessons.map(({ assignment, submission, works }) => <div key={assignment.id}>
+          <b><Link href={detailPath("schedule", assignment.id)}>{assignment.content.title}</Link></b>
+          <span>{assignment.starts ? date.format(new Date(assignment.starts)) + " МСК" : "Дата не назначена"}</span>
+          <span>{visits.has(assignment.id) ? "Посещение отмечено" : "Посещение не отмечено"}</span>
+          {works.length ? works.map(({ kind, state, tasks }) => {
+            const score = tasks.reduce((sum, { index }) => sum + (submission?.grades?.[index]?.score ?? 0), 0);
+            const max = tasks.reduce((sum, { task }) => sum + task.max, 0);
+            const label = workLabels[kind] + " · " + workStates[state] + (state === "reviewed" ? " · " + score + " из " + max : "");
+            return state === "pending" ? <span key={kind}>{label}</span> :
+              <Link key={kind} href={detailPath("review", assignment.id, member.id, kind)}>{label}</Link>;
+          }) : <span>Работ к сдаче нет</span>}
+        </div>)}
+      </div>
+    </>}
+  </section>;
 }
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="panel muted">{children}</p>;

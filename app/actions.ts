@@ -41,7 +41,7 @@ async function groupForCurator(id: string, curator: string) {
 export async function signIn(form: FormData) {
   const pasted = input(form, "invite");
   const invite = /^(?:[a-z][a-z0-9_-]*:\s*)?([A-Za-z0-9_-]{43})$/i.exec(pasted)?.[1];
-  if (!invite) redirect("/?error=invite");
+  if (!invite) redirect("/login?error=invite");
   const key = token();
   const redeemed = await transaction(async connection => {
     const row = await first<{ account: string }>("UPDATE invites SET used=now() WHERE hash=$1 AND (reusable OR used IS NULL) AND expires>now() RETURNING account", [hash(invite)], connection);
@@ -49,7 +49,7 @@ export async function signIn(form: FormData) {
     await rows("INSERT INTO sessions(hash,account,expires) VALUES ($1,$2,now()+interval '14 days')", [hash(key), row.account], connection);
     return true;
   });
-  if (!redeemed) redirect("/?error=invite");
+  if (!redeemed) redirect("/login?error=invite");
   const secure = process.env.OLIMPIK_SECURE_COOKIES === "true" || (await headers()).get("x-forwarded-proto") === "https";
   (await cookies()).set(cookieName, key, { httpOnly: true, sameSite: "lax", secure, path: "/", maxAge: 14 * 86400 });
   redirect("/cabinet");
@@ -59,13 +59,13 @@ export async function signOut() {
   const key = jar.get(cookieName)?.value;
   if (key) await rows("DELETE FROM sessions WHERE hash=$1", [hash(key)]);
   jar.delete(cookieName);
-  redirect("/");
+  redirect("/login");
 }
 
 export async function demoSignIn(form: FormData) {
-  if (!demoLoginEnabled()) redirect("/");
+  if (!demoLoginEnabled()) redirect("/login");
   const role = input(form, "role");
-  if (role !== "student" && role !== "curator" && role !== "methodist") redirect("/");
+  if (role !== "student" && role !== "curator" && role !== "methodist") redirect("/login");
   const key = token();
   const jar = await cookies();
   const previous = jar.get(cookieName)?.value;
@@ -76,7 +76,7 @@ export async function demoSignIn(form: FormData) {
     if (previous) await rows("DELETE FROM sessions WHERE hash=$1", [hash(previous)], connection);
     return true;
   });
-  if (!created) redirect("/?error=demo");
+  if (!created) redirect("/login?error=demo");
   const secure = process.env.OLIMPIK_SECURE_COOKIES === "true" || (await headers()).get("x-forwarded-proto") === "https";
   jar.set(cookieName, key, { httpOnly: true, sameSite: "lax", secure, path: "/", maxAge: 86400 });
   redirect("/cabinet");
@@ -106,7 +106,7 @@ export async function saveProgram(_previous: { message: string; error: boolean }
 
 export async function mutate(form: FormData) {
   const user = await account();
-  if (!user) redirect("/");
+  if (!user) redirect("/login");
   const action = input(form, "action");
   const section = input(form, "return");
   const levelParam = input(form, "level");

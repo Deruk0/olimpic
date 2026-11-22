@@ -1,21 +1,22 @@
 import Link from "next/link";
 import { roles, type Account } from "../../lib/model";
 import type { SessionAccount } from "../../lib/auth";
+import { canReviewInquiries } from "../../lib/inquiry-access";
 import { signOut } from "../actions";
 import { InterfaceIcon, type InterfaceIconName } from "../interface-icons";
 import { BrandLogo } from "../brand-logo";
 import { CabinetShell } from "./shell";
 
 export const cabinetNav = {
-  methodist: [["groups", "Группы и прогресс"], ["planning", "Расписание групп"], ["library", "Библиотека"], ["programs", "Программы и диагностика"], ["dev", "Dev-панель"]],
-  curator: [["schedule", "Расписание"], ["review", "Проверка работ"], ["students", "Траектории"]],
+  methodist: [["groups", "Группы и прогресс"], ["planning", "Расписание групп"], ["library", "Библиотека"], ["programs", "Программы и диагностика"], ["inquiries", "Заявки с сайта"], ["dev", "Dev-панель"]],
+  curator: [["schedule", "Расписание"], ["groups", "Мои группы"], ["review", "Проверка работ"], ["students", "Траектории"]],
   student: [["schedule", "Расписание"], ["homework", "Работы"], ["plan", "Траектория"], ["course", "Статистика"]]
 } as const;
 
-const navIcons = { planning: "schedule", students: "plan" } as const;
+const navIcons = { planning: "schedule", students: "plan", inquiries: "homework" } as const;
 
 function sectionIcon(id: typeof cabinetNav[Account["role"]][number][0]): InterfaceIconName {
-  if (id === "planning" || id === "students") return navIcons[id];
+  if (id === "planning" || id === "students" || id === "inquiries") return navIcons[id];
   return id;
 }
 
@@ -30,6 +31,7 @@ export function CabinetFrame({ user, view, title, saved, error, children }: {
   user: SessionAccount; view: string; title: string; saved?: string; error?: string; children: React.ReactNode;
 }) {
   const student = user.role === "student";
+  const navigation = cabinetNav[user.role].filter(([id]) => id !== "inquiries" || canReviewInquiries(user));
   const identity = <><AccountAvatar user={user} /><span className="account-name">{user.name}<small>{roles[user.role]}</small></span></>;
   return <CabinetShell preferences={{ mode: user.theme, palette: user.theme_palette }}>
     <header className="top">
@@ -51,8 +53,8 @@ export function CabinetFrame({ user, view, title, saved, error, children }: {
     </header>
     <div className="workspace">
       <aside className="sidebar">
-        <nav aria-label="Разделы кабинета">{cabinetNav[user.role].map(([id, label]) =>
-          <Link key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} href={student || id === "library" || id === "planning" || id === "dev" ? "/cabinet/" + id : "/cabinet?view=" + id}>
+        <nav aria-label="Разделы кабинета">{navigation.map(([id, label]) =>
+          <Link key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} href={student || id === "library" || id === "planning" || id === "dev" || id === "inquiries" ? "/cabinet/" + id : "/cabinet?view=" + id}>
             <InterfaceIcon name={sectionIcon(id)} /><span>{label}</span>
           </Link>
         )}</nav>

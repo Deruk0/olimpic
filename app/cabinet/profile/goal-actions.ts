@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { requireAccount } from "../../../lib/auth";
 import { rows } from "../../../lib/db";
 import { materialImageType } from "../../../lib/material-image";
-import { goalAdmissionPlans, goalCompetitions, goalDirections, goalImageLimit, goalKinds, goalResults, type StudentGoal } from "../../../lib/student-goal";
+import { goalAdmissionPlans, goalCompetitions, goalDirections, goalImageLimit, goalKinds, goalResultLimit, type StudentGoal } from "../../../lib/student-goal";
 
 export async function saveStudentGoal(_state: { error: string }, form: FormData) {
   const user = await requireAccount("student");
@@ -16,23 +16,22 @@ export async function saveStudentGoal(_state: { error: string }, form: FormData)
   };
   const kind = field("kind");
   const competition = field("competition");
-  const result = field("result");
+  const resultText = field("resultText");
   const admission = field("admission");
   const directions = [...new Set(form.getAll("directions"))];
 
   if (!Object.hasOwn(goalKinds, kind)) return { error: "Выберите основную цель." };
   if ((competition && !Object.hasOwn(goalCompetitions, competition))
-    || (result && !Object.hasOwn(goalResults, result))
     || (admission && !Object.hasOwn(goalAdmissionPlans, admission))
     || !directions.every((value): value is string => typeof value === "string" && Object.hasOwn(goalDirections, value))) {
     return { error: "Проверьте выбранные варианты." };
   }
 
   const reason = field("reason");
-  const nextStep = field("nextStep");
+  if (resultText.length > goalResultLimit) return { error: `Желаемый результат должен быть до ${goalResultLimit} символов.` };
   const university = field("university");
   const competitionName = competition === "listed" || competition === "other" ? field("competitionName") : "";
-  if (reason.length > 600 || nextStep.length > 200 || university.length > 160 || competitionName.length > 160) {
+  if (reason.length > 600 || university.length > 160 || competitionName.length > 160) {
     return { error: "Проверьте длину текстовых полей." };
   }
 
@@ -47,7 +46,7 @@ export async function saveStudentGoal(_state: { error: string }, form: FormData)
     }
   }
 
-  const details: StudentGoal = { kind, competition, competitionName, result, reason, nextStep, university, directions, admission };
+  const details: StudentGoal = { kind, competition, competitionName, resultText, reason, university, directions, admission };
   const removeImage = !image && form.get("removeImage") === "on";
   await rows(
     "INSERT INTO student_goal_profiles(student,details,image,image_version) VALUES ($1,$2,$3,$4) " +

@@ -28,6 +28,20 @@ ALTER TABLE assignments ADD COLUMN IF NOT EXISTS sources jsonb;
 ALTER TABLE assignments ADD COLUMN IF NOT EXISTS revision integer NOT NULL DEFAULT 1;
 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS answers jsonb NOT NULL DEFAULT '{}';
 CREATE TABLE IF NOT EXISTS material_files(id text PRIMARY KEY, filename text NOT NULL, bytes bytea NOT NULL);
+
+CREATE TABLE IF NOT EXISTS school_inquiries (
+  id text PRIMARY KEY,
+  submission_key text NOT NULL UNIQUE,
+  name text NOT NULL,
+  school_grade text CHECK (school_grade IN ('8', '9', 'other')),
+  phone text,
+  email text,
+  consented_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  contacted_at timestamptz,
+  CHECK (phone IS NOT NULL OR email IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS school_inquiries_order ON school_inquiries (created_at DESC, id DESC);
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS demo boolean NOT NULL DEFAULT false;
 ALTER TABLE assignments ALTER COLUMN starts DROP NOT NULL;
 ALTER TABLE assignments ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
